@@ -23,9 +23,15 @@ const environment = {
   REFRESH_TOKEN_EXPIRES_IN: process.env.REFRESH_TOKEN_EXPIRES_IN || '30d',
   COOKIE_SECRET: process.env.COOKIE_SECRET || 'cookie_secret_sign_chez_roger_becker_min32chars',
   
-  // CORS & Client
+  // CORS & Origines autorisees
   CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:5173',
-  CORS_ORIGIN: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  CORS_ORIGIN: (() => {
+    const raw = process.env.ALLOW_ORIGINS || process.env.CORS_ORIGIN || process.env.ALLOWED_ORIGINS;
+    if (raw) {
+      return raw.split(',').map((origin) => origin.trim().replace(/\/$/, '')).filter(Boolean);
+    }
+    return ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:3000'];
+  })(),
   
   // Parametres metier par defaut
   DEFAULT_DELIVERY_FEE: parseInt(process.env.DEFAULT_DELIVERY_FEE, 10) || 1000,

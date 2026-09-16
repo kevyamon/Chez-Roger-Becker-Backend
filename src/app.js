@@ -25,15 +25,18 @@ const app = express();
 // 1. Securite des en-tetes HTTP
 app.use(helmet());
 
-// 2. Configuration CORS stricte
+// 2. Configuration CORS stricte et flexible
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Autoriser requetes locales ou sans origin (ex: Postman/outils serveur)
-      if (!origin || env.CORS_ORIGIN.includes(origin)) {
+      // Requetes sans origin (ex: Postman, curl, serveurs)
+      if (!origin) return callback(null, true);
+      
+      const normalizedOrigin = origin.replace(/\/$/, '');
+      if (env.CORS_ORIGIN.includes(normalizedOrigin) || env.CORS_ORIGIN.includes('*')) {
         return callback(null, true);
       }
-      return callback(new Error('Origine non autorisee par la politique CORS'));
+      return callback(new Error(`Origine ${origin} non autorisee par la politique CORS`));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
