@@ -26,7 +26,7 @@ const restaurantSettingsSchema = new mongoose.Schema(
     address: {
       type: String,
       required: true,
-      default: 'Abidjan, Cote d Ivoire',
+      default: 'Abidjan, Côte d\'Ivoire',
       trim: true
     },
     description: {
@@ -36,14 +36,14 @@ const restaurantSettingsSchema = new mongoose.Schema(
     },
     openingHours: {
       type: String,
-      default: 'Mardi - Dimanche : 11h00 - 23h00 (Ferme le Lundi)',
+      default: 'Mardi - Dimanche : 11h00 - 23h00 (Fermé le lundi)',
       trim: true
     },
     deliveryFee: {
       type: Number,
       required: true,
       default: 1000,
-      min: [0, 'Les frais de livraison ne peuvent pas etre negatifs']
+      min: [0, 'Les frais de livraison ne peuvent pas être négatifs']
     },
     isOpen: {
       type: Boolean,
@@ -52,7 +52,7 @@ const restaurantSettingsSchema = new mongoose.Schema(
     },
     closedMessage: {
       type: String,
-      default: 'Le restaurant est actuellement ferme. Les commandes reprendront des la prochaine ouverture.',
+      default: 'Le restaurant est actuellement fermé. Les commandes reprendront dès la prochaine ouverture.',
       trim: true
     },
     socialLinks: {
