@@ -19,8 +19,8 @@ class MenuController {
 
   async getDishes(req, res, next) {
     try {
-      const { categoryId, search, isFeatured } = req.query;
-      const dishes = await menuService.getPublicDishes({ categoryId, search, isFeatured });
+      const { categoryId, category, type, search, isFeatured } = req.query;
+      const dishes = await menuService.getPublicDishes({ categoryId, category, type, search, isFeatured });
       return sendSuccess(res, { dishes }, 'Plats recuperes avec succes');
     } catch (error) {
       next(error);

@@ -5,6 +5,7 @@
 
 const mongoose = require('mongoose');
 const { generateSlug } = require('../utils/tokenGenerator');
+const { DishCategory, DishType } = require('../constants/enums');
 
 const dishOptionSchema = new mongoose.Schema(
   {
@@ -65,10 +66,25 @@ const dishSchema = new mongoose.Schema(
         message: 'Le prix promotionnel doit etre inferieur au prix standard'
       }
     },
+    category: {
+      type: String,
+      enum: Object.values(DishCategory),
+      default: DishCategory.NORMAL,
+      required: [true, 'La catégorie du plat est obligatoire'],
+      index: true
+    },
+    type: {
+      type: String,
+      enum: Object.values(DishType),
+      default: DishType.FOOD,
+      required: [true, 'Le type de plat est obligatoire'],
+      index: true
+    },
     categoryId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Category',
-      required: [true, 'La categorie est obligatoire'],
+      required: false,
+      default: null,
       index: true
     },
     isAvailable: {
@@ -113,6 +129,7 @@ dishSchema.pre('validate', function () {
 // Index textuel pour recherche ultra rapide sur le nom et la description
 dishSchema.index({ name: 'text', description: 'text' });
 dishSchema.index({ categoryId: 1, isAvailable: 1, sortOrder: 1 });
+dishSchema.index({ type: 1, category: 1, isAvailable: 1, sortOrder: 1 });
 
 const Dish = mongoose.model('Dish', dishSchema);
 

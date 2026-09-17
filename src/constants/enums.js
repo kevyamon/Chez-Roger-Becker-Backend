@@ -48,6 +48,17 @@ const RestaurantStatus = Object.freeze({
   CLOSED: 'CLOSED'
 });
 
+const DishCategory = Object.freeze({
+  NORMAL: 'Normal',
+  VIP: 'VIP',
+  SPECIAL: 'Spécial'
+});
+
+const DishType = Object.freeze({
+  FOOD: 'Nourriture',
+  DRINK: 'Boisson'
+});
+
 const ErrorCodes = Object.freeze({
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   UNAUTHORIZED: 'UNAUTHORIZED',
@@ -87,6 +98,9 @@ module.exports = {
   PaymentMethod,
   PaymentStatus,
   RestaurantStatus,
+  DishCategory,
+  DishType,
   ErrorCodes,
   AllowedOrderTransitions
 };
+

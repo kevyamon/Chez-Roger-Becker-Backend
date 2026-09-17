@@ -3,7 +3,7 @@
  */
 
 const { z } = require('zod');
-const { PromotionType } = require('../constants/enums');
+const { PromotionType, DishCategory, DishType } = require('../constants/enums');
 
 // Validation pour les Categories
 const createCategorySchema = z.object({
@@ -49,9 +49,21 @@ const createDishSchema = z.object({
     .min(0)
     .nullable()
     .optional(),
+  category: z
+    .enum(Object.values(DishCategory), {
+      errorMap: () => ({ message: 'Catégorie invalide. Choisissez parmi Normal, VIP, Spécial' })
+    })
+    .default(DishCategory.NORMAL),
+  type: z
+    .enum(Object.values(DishType), {
+      errorMap: () => ({ message: 'Type de plat invalide. Choisissez Nourriture ou Boisson' })
+    })
+    .default(DishType.FOOD),
   categoryId: z
-    .string({ required_error: 'La catégorie est obligatoire' })
-    .regex(/^[0-9a-fA-F]{24}$/, 'Identifiant de catégorie MongoDB invalide'),
+    .string()
+    .regex(/^[0-9a-fA-F]{24}$/, 'Identifiant de catégorie MongoDB invalide')
+    .optional()
+    .nullable(),
   isAvailable: z.boolean().optional().default(true),
   isFeatured: z.boolean().optional().default(false),
   options: z.array(dishOptionValidator).optional().default([]),

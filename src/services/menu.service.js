@@ -48,9 +48,11 @@ class MenuService {
   }
 
   // --- PLATS (DISHES) ---
-  async getPublicDishes({ categoryId, search, isFeatured }) {
+  async getPublicDishes({ categoryId, category, type, search, isFeatured }) {
     const query = { isAvailable: true };
     if (categoryId) query.categoryId = categoryId;
+    if (category) query.category = category;
+    if (type) query.type = type;
     if (isFeatured !== undefined) query.isFeatured = isFeatured === true || isFeatured === 'true';
     if (search && search.trim()) {
       query.$text = { $search: search.trim() };
@@ -74,9 +76,11 @@ class MenuService {
     return dish;
   }
 
-  async getAdminDishes({ categoryId, isAvailable, search, page = 1, limit = 20 }) {
+  async getAdminDishes({ categoryId, category, type, isAvailable, search, page = 1, limit = 20 }) {
     const query = {};
     if (categoryId) query.categoryId = categoryId;
+    if (category) query.category = category;
+    if (type) query.type = type;
     if (isAvailable !== undefined) query.isAvailable = isAvailable === 'true' || isAvailable === true;
     if (search && search.trim()) query.$text = { $search: search.trim() };
 

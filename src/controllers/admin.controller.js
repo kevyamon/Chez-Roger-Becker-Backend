@@ -26,8 +26,8 @@ class AdminController {
   // PLATS (DISHES)
   async getDishes(req, res, next) {
     try {
-      const { categoryId, isAvailable, search, page = 1, limit = 20 } = req.query;
-      const { dishes, total } = await menuService.getAdminDishes({ categoryId, isAvailable, search, page, limit });
+      const { categoryId, category, type, isAvailable, search, page = 1, limit = 20 } = req.query;
+      const { dishes, total } = await menuService.getAdminDishes({ categoryId, category, type, isAvailable, search, page, limit });
       return sendPaginated(res, dishes, { total, page, limit }, 'Plats recuperes avec succes');
     } catch (error) {
       next(error);

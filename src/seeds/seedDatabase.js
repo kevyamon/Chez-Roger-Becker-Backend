@@ -9,7 +9,7 @@ const Category = require('../models/category.model');
 const Dish = require('../models/dish.model');
 const Promotion = require('../models/promotion.model');
 const RestaurantSettings = require('../models/restaurantSettings.model');
-const { UserRole, DriverStatus, PromotionType } = require('../constants/enums');
+const { UserRole, DriverStatus, PromotionType, DishCategory, DishType } = require('../constants/enums');
 
 const seed = async () => {
   console.log('[Seed] Debut de l initialisation de la base de donnees...');
@@ -58,88 +58,94 @@ const seed = async () => {
     isActive: true
   });
 
-  // 3. Creation des Categories
-  const catGrillades = await Category.create({
-    name: 'Grillades & Braises',
-    description: 'Specialites au feu de bois et marinades maison',
+  // 3. Creation des Categories (Normal, VIP, Spécial)
+  const catNormal = await Category.create({
+    name: 'Normal',
+    description: 'Plats et grillades du quotidien savoureux',
     sortOrder: 1
   });
 
-  const catPlats = await Category.create({
-    name: 'Plats Cuisines',
-    description: 'Sauces traditionnelles et recettes mijotees',
+  const catVIP = await Category.create({
+    name: 'VIP',
+    description: 'Sélection gastronomique prestige pour grands événements',
     sortOrder: 2
   });
 
-  const catAccompagnements = await Category.create({
-    name: 'Accompagnements',
-    description: 'Attieke, alloco, frites et riz parfume',
+  const catSpecial = await Category.create({
+    name: 'Spécial',
+    description: 'Créations signatures du chef Roger Becker',
     sortOrder: 3
-  });
-
-  const catBoissons = await Category.create({
-    name: 'Boissons & Rafraichissements',
-    description: 'Jus locaux naturels et boissons fraiches',
-    sortOrder: 4
   });
 
   // 4. Creation des Plats
   const pouletBraise = await Dish.create({
-    name: 'Poulet Braise Maison (Entier)',
-    description: 'Poulet fermier marine aux epices secretes de Roger, braise au charbon de bois.',
+    name: 'Poulet Braisé Maison (Entier)',
+    description: 'Poulet fermier mariné aux épices secrètes de Roger, braisé au charbon de bois.',
     image: 'https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?auto=format&fit=crop&w=800&q=80',
     price: 5000,
     promotionalPrice: 4500,
-    categoryId: catGrillades._id,
+    category: DishCategory.SPECIAL,
+    type: DishType.FOOD,
+    categoryId: catSpecial._id,
     isFeatured: true,
     sortOrder: 1,
     options: [{ name: 'Piment doux' }, { name: 'Piment fort' }]
   });
 
   await Dish.create({
-    name: 'Poisson Carpe Braisee Royale',
-    description: 'Belle carpe fraiche braisee, servie avec sa sauce oignon-tomate et piments frais.',
+    name: 'Poisson Carpe Braisée Royale',
+    description: 'Belle carpe fraîche braisée, servie avec sa sauce oignon-tomate et piments frais.',
     image: 'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?auto=format&fit=crop&w=800&q=80',
     price: 6000,
-    categoryId: catGrillades._id,
+    category: DishCategory.VIP,
+    type: DishType.FOOD,
+    categoryId: catVIP._id,
     isFeatured: true,
     sortOrder: 2
   });
 
   await Dish.create({
     name: 'Garba Royal au Thon Frit',
-    description: 'Attieke fin accompagne de darne de thon marinee et frite a point, tomates et piments.',
+    description: 'Attiéké fin accompagné de darne de thon marinée et frite à point, tomates et piments.',
     image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80',
     price: 3500,
-    categoryId: catPlats._id,
+    category: DishCategory.NORMAL,
+    type: DishType.FOOD,
+    categoryId: catNormal._id,
     isFeatured: true,
     sortOrder: 1
   });
 
   await Dish.create({
-    name: 'Portion d Alloco Dore',
-    description: 'Bananes plantains mures frites a l huile d arachide pure.',
+    name: 'Portion d Alloco Doré',
+    description: 'Bananes plantains mûres frites à l huile d arachide pure.',
     image: 'https://images.unsplash.com/photo-1628294895950-9805252327bc?auto=format&fit=crop&w=800&q=80',
     price: 1000,
-    categoryId: catAccompagnements._id,
+    category: DishCategory.NORMAL,
+    type: DishType.FOOD,
+    categoryId: catNormal._id,
     sortOrder: 1
   });
 
   await Dish.create({
-    name: 'Attieke Frais Garba',
-    description: 'Semoule de manioc cuite a la vapeur, legere et aeree.',
+    name: 'Attiéké Frais Garba',
+    description: 'Semoule de manioc cuite à la vapeur, légère et aérée.',
     image: 'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&w=800&q=80',
     price: 500,
-    categoryId: catAccompagnements._id,
+    category: DishCategory.NORMAL,
+    type: DishType.FOOD,
+    categoryId: catNormal._id,
     sortOrder: 2
   });
 
   await Dish.create({
     name: 'Jus de Bissap Artisanal (50cl)',
-    description: 'Infusion de fleurs d hibiscus frais a la menthe poivree et sucre de canne.',
+    description: 'Infusion de fleurs d hibiscus frais à la menthe poivrée et sucre de canne.',
     image: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=800&q=80',
     price: 1000,
-    categoryId: catBoissons._id,
+    category: DishCategory.NORMAL,
+    type: DishType.DRINK,
+    categoryId: catNormal._id,
     sortOrder: 1
   });
 
