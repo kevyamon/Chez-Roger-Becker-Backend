@@ -1,14 +1,11 @@
 /**
- * Controleur d'administration du restaurant (AdminController).
- * Gestion complete du dashboard, catalogue, commandes, livreurs et parametres.
+ * Contrôleur d'administration du restaurant (AdminController).
+ * Gestion complète du dashboard, catalogue, commandes, livreurs et paramètres avec diffusion temps réel.
  */
 
 const settingsService = require('../services/settings.service');
 const menuService = require('../services/menu.service');
 const orderService = require('../services/order.service');
-const Category = require('../models/category.model');
-const Dish = require('../models/dish.model');
-const Promotion = require('../models/promotion.model');
 const Order = require('../models/order.model');
 const { sendSuccess, sendPaginated } = require('../utils/responseHelper');
 
@@ -17,7 +14,7 @@ class AdminController {
   async getDashboard(req, res, next) {
     try {
       const data = await settingsService.getDashboardKPIs();
-      return sendSuccess(res, data, 'Indicateurs du tableau de bord charges');
+      return sendSuccess(res, data, 'Indicateurs du tableau de bord chargés');
     } catch (error) {
       next(error);
     }
@@ -28,7 +25,7 @@ class AdminController {
     try {
       const { categoryId, category, type, isAvailable, search, page = 1, limit = 20 } = req.query;
       const { dishes, total } = await menuService.getAdminDishes({ categoryId, category, type, isAvailable, search, page, limit });
-      return sendPaginated(res, dishes, { total, page, limit }, 'Plats recuperes avec succes');
+      return sendPaginated(res, dishes, { total, page, limit }, 'Plats récupérés avec succès');
     } catch (error) {
       next(error);
     }
@@ -37,7 +34,9 @@ class AdminController {
   async createDish(req, res, next) {
     try {
       const dish = await menuService.createDish(req.body, req.user.id);
-      return sendSuccess(res, { dish }, 'Plat ajoute avec succes', 201);
+      const socketEmitter = req.app.get('socketEmitter');
+      if (socketEmitter) socketEmitter.emitGlobal('dish:created', dish);
+      return sendSuccess(res, { dish }, 'Plat ajouté avec succès', 201);
     } catch (error) {
       next(error);
     }
@@ -46,7 +45,9 @@ class AdminController {
   async updateDish(req, res, next) {
     try {
       const dish = await menuService.updateDish(req.params.id, req.body, req.user.id);
-      return sendSuccess(res, { dish }, 'Plat mis a jour avec succes');
+      const socketEmitter = req.app.get('socketEmitter');
+      if (socketEmitter) socketEmitter.emitGlobal('dish:updated', dish);
+      return sendSuccess(res, { dish }, 'Plat mis à jour avec succès');
     } catch (error) {
       next(error);
     }
@@ -54,18 +55,20 @@ class AdminController {
 
   async deleteDish(req, res, next) {
     try {
-      await Dish.findByIdAndDelete(req.params.id);
-      return sendSuccess(res, {}, 'Plat supprime avec succes');
+      await menuService.deleteDish(req.params.id, req.user.id);
+      const socketEmitter = req.app.get('socketEmitter');
+      if (socketEmitter) socketEmitter.emitGlobal('dish:deleted', { dishId: req.params.id });
+      return sendSuccess(res, {}, 'Plat supprimé avec succès');
     } catch (error) {
       next(error);
     }
   }
 
-  // CATEGORIES
+  // CATÉGORIES
   async getCategories(req, res, next) {
     try {
       const categories = await menuService.getCategories(false);
-      return sendSuccess(res, { categories }, 'Categories recuperees');
+      return sendSuccess(res, { categories }, 'Catégories récupérées');
     } catch (error) {
       next(error);
     }
@@ -74,7 +77,9 @@ class AdminController {
   async createCategory(req, res, next) {
     try {
       const category = await menuService.createCategory(req.body, req.user.id);
-      return sendSuccess(res, { category }, 'Categorie creee avec succes', 201);
+      const socketEmitter = req.app.get('socketEmitter');
+      if (socketEmitter) socketEmitter.emitGlobal('category:created', category);
+      return sendSuccess(res, { category }, 'Catégorie créée avec succès', 201);
     } catch (error) {
       next(error);
     }
@@ -83,7 +88,9 @@ class AdminController {
   async updateCategory(req, res, next) {
     try {
       const category = await menuService.updateCategory(req.params.id, req.body, req.user.id);
-      return sendSuccess(res, { category }, 'Categorie mise a jour');
+      const socketEmitter = req.app.get('socketEmitter');
+      if (socketEmitter) socketEmitter.emitGlobal('category:updated', category);
+      return sendSuccess(res, { category }, 'Catégorie mise à jour');
     } catch (error) {
       next(error);
     }
@@ -91,8 +98,10 @@ class AdminController {
 
   async deleteCategory(req, res, next) {
     try {
-      await Category.findByIdAndDelete(req.params.id);
-      return sendSuccess(res, {}, 'Categorie supprimee');
+      await menuService.deleteCategory(req.params.id, req.user.id);
+      const socketEmitter = req.app.get('socketEmitter');
+      if (socketEmitter) socketEmitter.emitGlobal('category:deleted', { categoryId: req.params.id });
+      return sendSuccess(res, {}, 'Catégorie supprimée');
     } catch (error) {
       next(error);
     }
@@ -103,7 +112,7 @@ class AdminController {
     try {
       const { status, driverId, search, date, page = 1, limit = 20 } = req.query;
       const { orders, total } = await orderService.getAdminOrders({ status, driverId, search, date, page, limit });
-      return sendPaginated(res, orders, { total, page, limit }, 'Commandes recuperees');
+      return sendPaginated(res, orders, { total, page, limit }, 'Commandes récupérées');
     } catch (error) {
       next(error);
     }
@@ -112,7 +121,7 @@ class AdminController {
   async getOrderById(req, res, next) {
     try {
       const order = await Order.findById(req.params.id).populate('driverId', 'firstName lastName phone');
-      return sendSuccess(res, { order }, 'Details de la commande charges');
+      return sendSuccess(res, { order }, 'Détails de la commande chargés');
     } catch (error) {
       next(error);
     }
@@ -129,7 +138,7 @@ class AdminController {
         req.body.note,
         socketEmitter
       );
-      return sendSuccess(res, { order }, 'Statut de commande mis a jour avec succes');
+      return sendSuccess(res, { order }, 'Statut de commande mis à jour avec succès');
     } catch (error) {
       next(error);
     }
@@ -139,7 +148,7 @@ class AdminController {
   async getDrivers(req, res, next) {
     try {
       const drivers = await settingsService.getAllDrivers();
-      return sendSuccess(res, { drivers }, 'Livreurs recuperes');
+      return sendSuccess(res, { drivers }, 'Livreurs récupérés');
     } catch (error) {
       next(error);
     }
@@ -148,7 +157,9 @@ class AdminController {
   async createDriver(req, res, next) {
     try {
       const driver = await settingsService.createDriver(req.body, req.user.id);
-      return sendSuccess(res, { driver }, 'Compte livreur cree avec succes', 201);
+      const socketEmitter = req.app.get('socketEmitter');
+      if (socketEmitter) socketEmitter.emitToAdmin('driver:created', driver);
+      return sendSuccess(res, { driver }, 'Compte livreur créé avec succès', 201);
     } catch (error) {
       next(error);
     }
@@ -157,13 +168,15 @@ class AdminController {
   async updateDriver(req, res, next) {
     try {
       const driver = await settingsService.updateDriver(req.params.id, req.body, req.user.id);
-      return sendSuccess(res, { driver }, 'Compte livreur mis a jour');
+      const socketEmitter = req.app.get('socketEmitter');
+      if (socketEmitter) socketEmitter.emitToAdmin('driver:updated', driver);
+      return sendSuccess(res, { driver }, 'Compte livreur mis à jour');
     } catch (error) {
       next(error);
     }
   }
 
-  // PARAMETRES (SETTINGS)
+  // PARAMÈTRES (SETTINGS)
   async getSettings(req, res, next) {
     try {
       const settings = await settingsService.getSettings();
@@ -176,6 +189,8 @@ class AdminController {
   async updateSettings(req, res, next) {
     try {
       const settings = await settingsService.updateSettings(req.body, req.user.id);
+      const socketEmitter = req.app.get('socketEmitter');
+      if (socketEmitter) socketEmitter.emitGlobal('restaurant:updated', settings);
       return sendSuccess(res, { settings }, 'Paramètres mis à jour avec succès');
     } catch (error) {
       next(error);
@@ -196,6 +211,8 @@ class AdminController {
   async createPromotion(req, res, next) {
     try {
       const promo = await menuService.createPromotion(req.body, req.user.id);
+      const socketEmitter = req.app.get('socketEmitter');
+      if (socketEmitter) socketEmitter.emitGlobal('promotion:created', promo);
       return sendSuccess(res, { promo }, 'Offre promotionnelle créée avec succès', 201);
     } catch (error) {
       next(error);
@@ -205,6 +222,8 @@ class AdminController {
   async updatePromotion(req, res, next) {
     try {
       const promo = await menuService.updatePromotion(req.params.id, req.body, req.user.id);
+      const socketEmitter = req.app.get('socketEmitter');
+      if (socketEmitter) socketEmitter.emitGlobal('promotion:updated', promo);
       return sendSuccess(res, { promo }, 'Offre promotionnelle mise à jour avec succès');
     } catch (error) {
       next(error);
@@ -214,6 +233,8 @@ class AdminController {
   async deletePromotion(req, res, next) {
     try {
       await menuService.deletePromotion(req.params.id, req.user.id);
+      const socketEmitter = req.app.get('socketEmitter');
+      if (socketEmitter) socketEmitter.emitGlobal('promotion:deleted', { promoId: req.params.id });
       return sendSuccess(res, {}, 'Offre promotionnelle supprimée avec succès');
     } catch (error) {
       next(error);
@@ -233,3 +254,4 @@ class AdminController {
 }
 
 module.exports = new AdminController();
+

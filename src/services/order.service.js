@@ -172,11 +172,16 @@ class OrderService {
     });
 
     if (socketEmitter) {
-      socketEmitter.emitToOrder(order.trackingToken, 'order:status-changed', {
+      const statusPayload = {
         orderId: order._id,
+        orderNumber: order.orderNumber,
+        trackingToken: order.trackingToken,
         status: newStatus,
-        statusHistory: order.statusHistory
-      });
+        statusHistory: order.statusHistory,
+        driver: order.driverId
+      };
+      socketEmitter.emitToOrder(order.trackingToken, 'order:status-changed', statusPayload);
+      socketEmitter.emitGlobal('order:status-changed', statusPayload);
       socketEmitter.emitToAdmin('order:updated', order);
       if (newStatus === OrderStatus.READY_FOR_PICKUP) {
         socketEmitter.emitToDrivers('order:available', order);

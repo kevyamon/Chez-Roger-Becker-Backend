@@ -31,7 +31,7 @@ class MenuService {
   async updateCategory(id, data, actorId) {
     const category = await Category.findByIdAndUpdate(id, data, { new: true, runValidators: true });
     if (!category) {
-      const error = new Error('Categorie introuvable');
+      const error = new Error('Catégorie introuvable');
       error.statusCode = 404;
       error.code = ErrorCodes.NOT_FOUND;
       throw error;
@@ -43,6 +43,25 @@ class MenuService {
       targetModel: 'Category',
       targetId: id,
       details: data
+    });
+    return category;
+  }
+
+  async deleteCategory(id, actorId) {
+    const category = await Category.findByIdAndDelete(id);
+    if (!category) {
+      const error = new Error('Catégorie introuvable');
+      error.statusCode = 404;
+      error.code = ErrorCodes.NOT_FOUND;
+      throw error;
+    }
+    await AuditLog.create({
+      action: 'CATEGORY_DELETED',
+      actorId,
+      actorRole: 'ADMIN',
+      targetModel: 'Category',
+      targetId: id,
+      details: { name: category.name }
     });
     return category;
   }
@@ -125,6 +144,25 @@ class MenuService {
       targetModel: 'Dish',
       targetId: id,
       details: data
+    });
+    return dish;
+  }
+
+  async deleteDish(id, actorId) {
+    const dish = await Dish.findByIdAndDelete(id);
+    if (!dish) {
+      const error = new Error('Plat introuvable');
+      error.statusCode = 404;
+      error.code = ErrorCodes.NOT_FOUND;
+      throw error;
+    }
+    await AuditLog.create({
+      action: 'DISH_DELETED',
+      actorId,
+      actorRole: 'ADMIN',
+      targetModel: 'Dish',
+      targetId: id,
+      details: { name: dish.name }
     });
     return dish;
   }

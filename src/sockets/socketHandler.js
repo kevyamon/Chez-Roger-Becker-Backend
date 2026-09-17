@@ -1,6 +1,6 @@
 /**
- * Gestionnaire Socket.IO pour la communication temps reel.
- * Salons : 'admin', 'drivers', et 'order_{trackingToken}' pour le suivi client.
+ * Gestionnaire Socket.IO pour la communication temps réel.
+ * Salons : 'admin', 'drivers', 'order_{trackingToken}' et diffusion globale.
  */
 
 const initSocket = (io) => {
@@ -15,7 +15,7 @@ const initSocket = (io) => {
       socket.join('drivers');
     });
 
-    // 3. Rejoindre le salon de suivi d'une commande specifique
+    // 3. Rejoindre le salon de suivi d'une commande spécifique
     socket.on('join:order', (trackingToken) => {
       if (trackingToken) {
         socket.join(`order_${trackingToken}`);
@@ -23,11 +23,11 @@ const initSocket = (io) => {
     });
 
     socket.on('disconnect', () => {
-      // Deconnexion propre sans log excessif
+      // Déconnexion propre sans log excessif
     });
   });
 
-  // Interface d'emission d'evenements
+  // Interface d'émission d'événements
   const socketEmitter = {
     emitToAdmin: (event, data) => {
       io.to('admin').emit(event, data);
@@ -47,3 +47,4 @@ const initSocket = (io) => {
 };
 
 module.exports = { initSocket };
+
