@@ -22,6 +22,9 @@ const adminRoutes = require('./routes/admin.routes');
 
 const app = express();
 
+// 0. Configuration Proxy inverse (Render, Heroku, Nginx)
+app.set('trust proxy', 1);
+
 // 1. Securite des en-tetes HTTP
 app.use(helmet());
 

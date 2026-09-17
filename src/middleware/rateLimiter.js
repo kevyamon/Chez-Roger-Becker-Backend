@@ -13,6 +13,7 @@ const createLimiter = ({ windowMs, max, message }) => {
     max,
     standardHeaders: true,
     legacyHeaders: false,
+    validate: { xForwardedForHeader: false, trustProxy: false },
     handler: (req, res) => {
       return sendError(
         res,
@@ -27,25 +28,25 @@ const createLimiter = ({ windowMs, max, message }) => {
   });
 };
 
-// Limiteur global pour l'ensemble des routes publiques (300 requetes par 15 min)
+// Limiteur global pour l'ensemble des routes publiques (300 requêtes par 15 min)
 const globalLimiter = createLimiter({
   windowMs: 15 * 60 * 1000,
   max: 300,
-  message: 'Trop de requetes depuis cette adresse IP. Veuillez reessayer dans quelques minutes.'
+  message: 'Trop de requêtes depuis cette adresse IP. Veuillez réessayer dans quelques minutes.'
 });
 
 // Limiteur strict pour les routes d'authentification (10 tentatives par 15 min)
 const authLimiter = createLimiter({
   windowMs: 15 * 60 * 1000,
   max: 10,
-  message: 'Trop de tentatives de connexion infructueuses. Votre acces est temporairement bloque pendant 15 minutes.'
+  message: 'Trop de tentatives de connexion infructueuses. Votre accès est temporairement bloqué pendant 15 minutes.'
 });
 
-// Limiteur pour la creation de commande (15 commandes par 15 min par IP)
+// Limiteur pour la création de commande (15 commandes par 15 min par IP)
 const orderLimiter = createLimiter({
   windowMs: 15 * 60 * 1000,
   max: 15,
-  message: 'Trop de commandes initiees en peu de temps. Veuillez patienter avant de renouveler l operation.'
+  message: 'Trop de commandes initiées en peu de temps. Veuillez patienter avant de renouveler l\'opération.'
 });
 
 module.exports = {
