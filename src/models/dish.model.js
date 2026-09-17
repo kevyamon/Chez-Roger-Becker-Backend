@@ -104,11 +104,10 @@ const dishSchema = new mongoose.Schema(
 );
 
 // Slug automatique avant validation
-dishSchema.pre('validate', function (next) {
+dishSchema.pre('validate', function () {
   if (this.isModified('name') && (!this.slug || this.isModified('slug'))) {
     this.slug = generateSlug(this.slug || this.name);
   }
-  next();
 });
 
 // Index textuel pour recherche ultra rapide sur le nom et la description

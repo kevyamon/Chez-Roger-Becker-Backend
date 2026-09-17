@@ -2,6 +2,7 @@
  * Service de gestion des parametres du restaurant, indicateurs KPI et livreurs (SettingsService).
  */
 
+const bcrypt = require('bcryptjs');
 const RestaurantSettings = require('../models/restaurantSettings.model');
 const Order = require('../models/order.model');
 const User = require('../models/user.model');
@@ -134,7 +135,8 @@ class SettingsService {
 
   async updateDriver(id, updateData, actorId) {
     if (updateData.password) {
-      updateData.passwordHash = updateData.password;
+      const salt = await bcrypt.genSalt(12);
+      updateData.passwordHash = await bcrypt.hash(updateData.password, salt);
       delete updateData.password;
     }
 

@@ -55,11 +55,10 @@ const categorySchema = new mongoose.Schema(
 );
 
 // Generation automatique du slug avant validation
-categorySchema.pre('validate', function (next) {
+categorySchema.pre('validate', function () {
   if (this.isModified('name') && (!this.slug || this.isModified('slug'))) {
     this.slug = generateSlug(this.slug || this.name);
   }
-  next();
 });
 
 const Category = mongoose.model('Category', categorySchema);

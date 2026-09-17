@@ -90,15 +90,10 @@ const userSchema = new mongoose.Schema(
 );
 
 // Hachage du mot de passe avant enregistrement (minimum 12 rounds)
-userSchema.pre('save', async function (next) {
-  if (!this.isModified('passwordHash')) return next();
-  try {
-    const salt = await bcrypt.genSalt(12);
-    this.passwordHash = await bcrypt.hash(this.passwordHash, salt);
-    return next();
-  } catch (err) {
-    return next(err);
-  }
+userSchema.pre('save', async function () {
+  if (!this.isModified('passwordHash')) return;
+  const salt = await bcrypt.genSalt(12);
+  this.passwordHash = await bcrypt.hash(this.passwordHash, salt);
 });
 
 // Methode d instance pour comparer les mots de passe
