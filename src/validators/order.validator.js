@@ -8,13 +8,13 @@ const { OrderStatus, PaymentMethod } = require('../constants/enums');
 
 const orderItemInputSchema = z.object({
   dishId: z
-    .string({ required_error: 'L identifiant du plat est obligatoire' })
+    .string({ required_error: 'L\'identifiant du plat est obligatoire' })
     .regex(/^[0-9a-fA-F]{24}$/, 'Identifiant de plat invalide'),
   quantity: z
-    .number({ required_error: 'La quantite est obligatoire' })
-    .int('La quantite doit etre un nombre entier')
-    .min(1, 'La quantite minimale est de 1')
-    .max(50, 'Quantite excessive pour un plat individuel'),
+    .number({ required_error: 'La quantité est obligatoire' })
+    .int('La quantité doit être un nombre entier')
+    .min(1, 'La quantité minimale est de 1')
+    .max(50, 'Quantité excessive pour un plat individuel'),
   selectedOptions: z.array(z.string().trim()).optional().default([])
 });
 
@@ -27,22 +27,22 @@ const createOrderSchema = z.object({
   customer: z.object({
     name: z
       .string({ required_error: 'Le nom du client est obligatoire' })
-      .min(2, 'Le nom doit comporter au moins 2 caracteres')
+      .min(2, 'Le nom doit comporter au moins 2 caractères')
       .max(100)
       .trim(),
     phone: z
-      .string({ required_error: 'Le numero de telephone est obligatoire' })
-      .min(8, 'Numero de telephone invalide')
+      .string({ required_error: 'Le numéro de téléphone est obligatoire' })
+      .min(8, 'Numéro de téléphone invalide')
       .max(20)
       .trim()
   }),
   items: z
-    .array(orderItemInputSchema, { required_error: 'Le panier ne peut pas etre vide' })
+    .array(orderItemInputSchema, { required_error: 'Le panier ne peut pas être vide' })
     .min(1, 'Le panier doit contenir au moins un article'),
   delivery: z.object({
     address: z
-      .string({ required_error: 'L adresse de livraison est obligatoire' })
-      .min(3, 'L adresse de livraison doit comporter au moins 3 caracteres')
+      .string({ required_error: 'L\'adresse de livraison est obligatoire' })
+      .min(3, 'L\'adresse de livraison doit comporter au moins 3 caractères')
       .max(300)
       .trim(),
     note: z.string().max(500).optional().default(''),
@@ -52,7 +52,7 @@ const createOrderSchema = z.object({
     })
   }),
   paymentMethod: z
-    .nativeEnum(PaymentMethod, { errorMap: () => ({ message: 'Methode de paiement non supportee' }) })
+    .nativeEnum(PaymentMethod, { errorMap: () => ({ message: 'Méthode de paiement non supportée' }) })
     .optional()
     .default(PaymentMethod.CASH_ON_DELIVERY)
 });

@@ -136,10 +136,10 @@ const orderSchema = new mongoose.Schema(
         },
         coordinates: {
           type: [Number], // [longitude, latitude]
-          required: [true, 'Les coordonnees GPS sont obligatoires'],
+          required: [true, 'Les coordonnées GPS sont obligatoires'],
           validate: {
             validator: (coords) => Array.isArray(coords) && coords.length === 2,
-            message: 'Les coordonnees doivent contenir exactement [longitude, latitude]'
+            message: 'Les coordonnées doivent contenir exactement [longitude, latitude]'
           }
         }
       }

@@ -34,7 +34,7 @@ class AuthService {
   }
 
   /**
-   * Connexion administrateur ou livreur par e-mail ou telephone.
+   * Connexion administrateur ou livreur par e-mail ou téléphone.
    */
   async login({ identifier, password, ipAddress }) {
     const user = await User.findOne({
@@ -43,7 +43,7 @@ class AuthService {
     }).select('+passwordHash +refreshTokenHash');
 
     if (!user) {
-      const error = new Error('Identifiant ou mot de passe incorrect');
+      const error = new Error('Identifiant ou mot de passe incorrect.');
       error.statusCode = 401;
       error.code = ErrorCodes.UNAUTHORIZED;
       throw error;
@@ -51,7 +51,7 @@ class AuthService {
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      const error = new Error('Identifiant ou mot de passe incorrect');
+      const error = new Error('Identifiant ou mot de passe incorrect.');
       error.statusCode = 401;
       error.code = ErrorCodes.UNAUTHORIZED;
       throw error;
@@ -59,7 +59,7 @@ class AuthService {
 
     const { accessToken, refreshToken } = this.generateTokens(user);
 
-    // Stockage hache du refresh token pour rotation securisee
+    // Stockage haché du refresh token pour rotation sécurisée
     const salt = await bcrypt.genSalt(10);
     user.refreshTokenHash = await bcrypt.hash(refreshToken, salt);
     user.lastLoginAt = new Date();
@@ -73,19 +73,134 @@ class AuthService {
   }
 
   /**
-   * Deconnexion et invalidation du refresh token.
+   * Inscription d'un compte Administrateur protégé par la clé secrète AD_PW.
+   */
+  async registerAdmin({ name, email, phone, password, privateKey, ipAddress }) {
+    if (!privateKey || privateKey.trim() !== env.AD_PW) {
+      const error = new Error('Clé privée d\'administration invalide ou non autorisée.');
+      error.statusCode = 403;
+      error.code = ErrorCodes.FORBIDDEN;
+      throw error;
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedPhone = phone.trim();
+
+    const existingUser = await User.findOne({
+      $or: [{ email: normalizedEmail }, { phone: normalizedPhone }]
+    });
+
+    if (existingUser) {
+      const error = new Error('Un utilisateur avec cette adresse e-mail ou ce numéro de téléphone existe déjà.');
+      error.statusCode = 409;
+      error.code = ErrorCodes.CONFLICT;
+      throw error;
+    }
+
+    const nameParts = (name || '').trim().split(' ');
+    const firstName = nameParts[0] || 'Admin';
+    const lastName = nameParts.slice(1).join(' ') || 'Principal';
+
+    const user = new User({
+      firstName,
+      lastName,
+      email: normalizedEmail,
+      phone: normalizedPhone,
+      passwordHash: password, // Haché automatiquement par pre('save') à 12 rounds
+      role: UserRole.ADMIN,
+      isActive: true
+    });
+
+    await user.save();
+
+    const { accessToken, refreshToken } = this.generateTokens(user);
+
+    const salt = await bcrypt.genSalt(10);
+    user.refreshTokenHash = await bcrypt.hash(refreshToken, salt);
+    user.lastLoginAt = new Date();
+    await user.save();
+
+    // Journalisation d'audit de création admin
+    await AuditLog.create({
+      action: 'ADMIN_REGISTER',
+      performedBy: user._id,
+      entity: 'USER',
+      entityId: user._id.toString(),
+      details: { email: user.email, ipAddress }
+    }).catch((err) => console.error('[AuditLog Error]', err.message));
+
+    return {
+      user: user.toJSON(),
+      accessToken,
+      refreshToken
+    };
+  }
+
+  /**
+   * Rafraîchissement sécurisé d'access token avec rotation de refresh token.
+   */
+  async refreshToken(token) {
+    if (!token) {
+      const error = new Error('Session expirée ou jeton de rafraîchissement manquant.');
+      error.statusCode = 401;
+      error.code = ErrorCodes.UNAUTHORIZED;
+      throw error;
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, env.REFRESH_TOKEN_SECRET);
+    } catch (err) {
+      const error = new Error('Session expirée ou jeton invalide.');
+      error.statusCode = 401;
+      error.code = ErrorCodes.UNAUTHORIZED;
+      throw error;
+    }
+
+    const user = await User.findById(decoded.id).select('+refreshTokenHash');
+    if (!user || !user.isActive || !user.refreshTokenHash) {
+      const error = new Error('Session invalide ou compte inactif.');
+      error.statusCode = 401;
+      error.code = ErrorCodes.UNAUTHORIZED;
+      throw error;
+    }
+
+    const isTokenMatch = await bcrypt.compare(token, user.refreshTokenHash);
+    if (!isTokenMatch) {
+      user.refreshTokenHash = null;
+      await user.save();
+      const error = new Error('Tentative de réutilisation de session détectée. Veuillez vous reconnecter.');
+      error.statusCode = 401;
+      error.code = ErrorCodes.UNAUTHORIZED;
+      throw error;
+    }
+
+    const { accessToken, refreshToken: newRefreshToken } = this.generateTokens(user);
+    const salt = await bcrypt.genSalt(10);
+    user.refreshTokenHash = await bcrypt.hash(newRefreshToken, salt);
+    await user.save();
+
+    return {
+      user: user.toJSON(),
+      accessToken,
+      refreshToken: newRefreshToken
+    };
+  }
+
+  /**
+   * Déconnexion et invalidation du refresh token.
    */
   async logout(userId) {
     await User.findByIdAndUpdate(userId, { refreshTokenHash: null });
   }
 
   /**
-   * Recuperation du profil connecte actuel.
+   * Récupération du profil connecté actuel.
    */
   async getMe(userId) {
     const user = await User.findById(userId).lean();
     if (!user || !user.isActive) {
-      const error = new Error('Compte introuvable ou desactive');
+      const error = new Error('Compte introuvable ou désactivé.');
       error.statusCode = 404;
       error.code = ErrorCodes.NOT_FOUND;
       throw error;

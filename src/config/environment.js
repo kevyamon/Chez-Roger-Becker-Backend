@@ -37,6 +37,7 @@ const environment = {
   DEFAULT_DELIVERY_FEE: parseInt(process.env.DEFAULT_DELIVERY_FEE, 10) || 1000,
   RESTAURANT_NAME: process.env.RESTAURANT_NAME || 'Chez Roger Becker',
   RESTAURANT_PHONE: process.env.RESTAURANT_PHONE || '+225 07 00 00 00 00',
+  AD_PW: process.env.AD_PW || 'RogerBeckerMasterSecret2026!',
 
   // Securite Cookies
   isProduction: process.env.NODE_ENV === 'production',
