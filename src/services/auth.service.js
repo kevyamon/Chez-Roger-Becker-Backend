@@ -121,13 +121,19 @@ class AuthService {
     await user.save();
 
     // Journalisation d'audit de création admin
-    await AuditLog.create({
-      action: 'ADMIN_REGISTER',
-      performedBy: user._id,
-      entity: 'USER',
-      entityId: user._id.toString(),
-      details: { email: user.email, ipAddress }
-    }).catch((err) => console.error('[AuditLog Error]', err.message));
+    try {
+      await AuditLog.create({
+        action: 'ADMIN_REGISTER',
+        actorId: user._id,
+        actorRole: UserRole.ADMIN,
+        targetModel: 'USER',
+        targetId: user._id.toString(),
+        details: { email: user.email },
+        ipAddress: ipAddress || ''
+      });
+    } catch (auditErr) {
+      console.error('[AuditLog Error]', auditErr.message);
+    }
 
     return {
       user: user.toJSON(),
