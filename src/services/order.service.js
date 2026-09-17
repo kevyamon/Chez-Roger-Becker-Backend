@@ -8,6 +8,7 @@ const Dish = require('../models/dish.model');
 const RestaurantSettings = require('../models/restaurantSettings.model');
 const AuditLog = require('../models/auditLog.model');
 const { generateTrackingToken, generateOrderNumber } = require('../utils/tokenGenerator');
+const { checkIsRestaurantOpen } = require('../utils/scheduleHelper');
 const { OrderStatus, AllowedOrderTransitions, ErrorCodes } = require('../constants/enums');
 
 class OrderService {
@@ -15,10 +16,11 @@ class OrderService {
    * Creation securisee d'une nouvelle commande client.
    */
   async createOrder(orderPayload, socketEmitter = null) {
-    // 1. Verification du statut du restaurant
+    // 1. Verification du statut et des horaires d'ouverture du restaurant
     const settings = await RestaurantSettings.getSettings();
-    if (!settings.isOpen) {
-      const error = new Error(settings.closedMessage || 'Le restaurant est actuellement ferme.');
+    const status = checkIsRestaurantOpen(settings);
+    if (!status.isOpen) {
+      const error = new Error(settings.closedMessage || status.reason || 'Le restaurant est actuellement fermé.');
       error.statusCode = 400;
       error.code = ErrorCodes.RESTAURANT_CLOSED;
       throw error;
@@ -105,16 +107,22 @@ class OrderService {
   }
 
   /**
-   * Suivi public d'une commande via son trackingToken unique.
+   * Suivi public d'une commande via son trackingToken unique ou son numéro de commande (ex: RB-XXXXXX).
    */
-  async trackOrderByToken(trackingToken) {
-    const order = await Order.findOne({ trackingToken })
-      .select('-customer.phone') // Masquage partiel securise
+  async trackOrderByToken(identifier) {
+    const cleanId = (identifier || '').trim();
+    const order = await Order.findOne({
+      $or: [
+        { trackingToken: cleanId },
+        { orderNumber: cleanId.toUpperCase() }
+      ]
+    })
+      .select('-customer.phone') // Masquage partiel sécurisé
       .populate('driverId', 'firstName lastName phone')
       .lean();
 
     if (!order) {
-      const error = new Error('Commande introuvable avec ce lien de suivi.');
+      const error = new Error('Commande introuvable avec ce numéro ou lien de suivi.');
       error.statusCode = 404;
       error.code = ErrorCodes.ORDER_NOT_FOUND;
       throw error;
