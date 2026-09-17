@@ -76,7 +76,10 @@ class AuthService {
    * Inscription d'un compte Administrateur protégé par la clé secrète AD_PW.
    */
   async registerAdmin({ name, email, phone, password, privateKey, ipAddress }) {
-    if (!privateKey || privateKey.trim() !== env.AD_PW) {
+    const expectedKey = (env.AD_PW || '').trim();
+    const providedKey = (privateKey || '').trim();
+
+    if (!providedKey || providedKey !== expectedKey) {
       const error = new Error('Clé privée d\'administration invalide ou non autorisée.');
       error.statusCode = 403;
       error.code = ErrorCodes.FORBIDDEN;
@@ -108,16 +111,14 @@ class AuthService {
       phone: normalizedPhone,
       passwordHash: password, // Haché automatiquement par pre('save') à 12 rounds
       role: UserRole.ADMIN,
-      isActive: true
+      isActive: true,
+      lastLoginAt: new Date()
     });
-
-    await user.save();
 
     const { accessToken, refreshToken } = this.generateTokens(user);
 
     const salt = await bcrypt.genSalt(10);
     user.refreshTokenHash = await bcrypt.hash(refreshToken, salt);
-    user.lastLoginAt = new Date();
     await user.save();
 
     // Journalisation d'audit de création admin

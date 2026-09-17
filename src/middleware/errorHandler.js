@@ -11,12 +11,8 @@ const env = require('../config/environment');
  * Middleware principal de capture des erreurs Express (4 parametres obligatoires).
  */
 const errorHandler = (err, req, res, next) => {
-  // Journalisation controlee de l'erreur
-  if (!env.isProduction) {
-    console.error('[Error Handler]', err);
-  } else {
-    console.error(`[Error Handler] ${err.name || 'Error'}: ${err.message}`);
-  }
+  // Journalisation systématique de l'erreur avec pile d'exécution
+  console.error('[Error Handler]', err.stack || err);
 
   // 1. Erreur de syntaxe JSON dans le corps de la requête
   if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
@@ -68,7 +64,7 @@ const errorHandler = (err, req, res, next) => {
       res,
       {
         code: ErrorCodes.VALIDATION_ERROR,
-        message: 'Erreur de validation de la base de données.',
+        message: 'Erreur de validation des données fournies.',
         details
       },
       422
@@ -89,11 +85,9 @@ const errorHandler = (err, req, res, next) => {
   }
 
   // 6. Erreurs métier personnalisées avec statusCode spécifique
-  const statusCode = Number(err.statusCode) || 500;
+  const statusCode = Number(err.statusCode) || (err.name === 'ValidationError' ? 422 : 500);
   const errorCode = err.code || (statusCode === 500 ? ErrorCodes.INTERNAL_ERROR : ErrorCodes.VALIDATION_ERROR);
-  const message = statusCode === 500 && env.isProduction 
-    ? 'Une erreur interne inattendue est survenue.' 
-    : (err.message || 'Une erreur est survenue.');
+  const message = err.message || (statusCode === 500 ? 'Une erreur interne inattendue est survenue.' : 'Une erreur est survenue.');
 
   return sendError(
     res,
