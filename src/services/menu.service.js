@@ -138,6 +138,20 @@ class MenuService {
       .lean();
   }
 
+  async getAdminPromotions({ page = 1, limit = 20 } = {}) {
+    const skip = (Number(page) - 1) * Number(limit);
+    const [promotions, total] = await Promise.all([
+      Promotion.find()
+        .populate('dishId', 'name price image')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+      Promotion.countDocuments()
+    ]);
+    return { promotions, total, page, limit };
+  }
+
   async createPromotion(data, actorId) {
     const promo = await Promotion.create(data);
     await AuditLog.create({
@@ -146,6 +160,44 @@ class MenuService {
       actorRole: 'ADMIN',
       targetModel: 'Promotion',
       targetId: promo._id.toString(),
+      details: { title: promo.title }
+    });
+    return promo;
+  }
+
+  async updatePromotion(id, data, actorId) {
+    const promo = await Promotion.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+    if (!promo) {
+      const error = new Error('Promotion introuvable');
+      error.statusCode = 404;
+      error.code = ErrorCodes.NOT_FOUND;
+      throw error;
+    }
+    await AuditLog.create({
+      action: 'PROMOTION_UPDATED',
+      actorId,
+      actorRole: 'ADMIN',
+      targetModel: 'Promotion',
+      targetId: id,
+      details: data
+    });
+    return promo;
+  }
+
+  async deletePromotion(id, actorId) {
+    const promo = await Promotion.findByIdAndDelete(id);
+    if (!promo) {
+      const error = new Error('Promotion introuvable');
+      error.statusCode = 404;
+      error.code = ErrorCodes.NOT_FOUND;
+      throw error;
+    }
+    await AuditLog.create({
+      action: 'PROMOTION_DELETED',
+      actorId,
+      actorRole: 'ADMIN',
+      targetModel: 'Promotion',
+      targetId: id,
       details: { title: promo.title }
     });
     return promo;

@@ -39,8 +39,17 @@ router.get('/drivers', adminController.getDrivers);
 router.post('/drivers', validateRequest(createDriverSchema), adminController.createDriver);
 router.patch('/drivers/:id', validateRequest(updateDriverSchema), adminController.updateDriver);
 
+// Gestion des promotions
+router.get('/promotions', adminController.getPromotions);
+router.post('/promotions', validateRequest(createPromotionSchema), adminController.createPromotion);
+router.patch('/promotions/:id', validateRequest(updatePromotionSchema), adminController.updatePromotion);
+router.delete('/promotions/:id', adminController.deletePromotion);
+
 // Parametres du restaurant
 router.get('/settings', adminController.getSettings);
 router.patch('/settings', validateRequest(updateSettingsSchema), adminController.updateSettings);
+
+// Journal d'audit (Audit Trail)
+router.get('/audit-logs', adminController.getAuditLogs);
 
 module.exports = router;

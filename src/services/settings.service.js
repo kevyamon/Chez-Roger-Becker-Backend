@@ -162,6 +162,26 @@ class SettingsService {
 
     return driver;
   }
+
+  // --- JOURNAL D'AUDIT (AUDIT LOGS) ---
+  async getAuditLogs({ page = 1, limit = 30, action, actorId } = {}) {
+    const query = {};
+    if (action) query.action = action;
+    if (actorId) query.actorId = actorId;
+
+    const skip = (Number(page) - 1) * Number(limit);
+    const [logs, total] = await Promise.all([
+      AuditLog.find(query)
+        .populate('actorId', 'firstName lastName email role')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+      AuditLog.countDocuments(query)
+    ]);
+
+    return { logs, total, page, limit };
+  }
 }
 
 module.exports = new SettingsService();

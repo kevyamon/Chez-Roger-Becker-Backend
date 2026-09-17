@@ -157,9 +157,9 @@ const seed = async () => {
   await RestaurantSettings.create({
     name: 'Chez Roger Becker',
     phone: '+225 07 01 02 03 04',
-    address: 'Cocody Vallon, Rue des Jardins, Abidjan',
-    description: 'L authenticite culinaire ivoirienne et les meilleures grillades d Abidjan.',
-    openingHours: 'Tous les jours de 11h00 a 23h30',
+    address: 'Cocody Vallon, Rue des Jardins, Abidjan, Côte d\'Ivoire',
+    description: 'L\'authenticité culinaire ivoirienne et les meilleures grillades d\'Abidjan.',
+    openingHours: 'Mardi – Dimanche : 11h00 – 23h00 (Fermé le lundi)',
     deliveryFee: 1000,
     isOpen: true
   });

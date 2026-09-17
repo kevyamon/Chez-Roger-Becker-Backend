@@ -167,7 +167,7 @@ class AdminController {
   async getSettings(req, res, next) {
     try {
       const settings = await settingsService.getSettings();
-      return sendSuccess(res, { settings }, 'Parametres charges');
+      return sendSuccess(res, { settings }, 'Paramètres chargés avec succès');
     } catch (error) {
       next(error);
     }
@@ -176,7 +176,56 @@ class AdminController {
   async updateSettings(req, res, next) {
     try {
       const settings = await settingsService.updateSettings(req.body, req.user.id);
-      return sendSuccess(res, { settings }, 'Parametres mis a jour');
+      return sendSuccess(res, { settings }, 'Paramètres mis à jour avec succès');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // PROMOTIONS (ADMIN)
+  async getPromotions(req, res, next) {
+    try {
+      const { page = 1, limit = 20 } = req.query;
+      const { promotions, total } = await menuService.getAdminPromotions({ page, limit });
+      return sendPaginated(res, promotions, { total, page, limit }, 'Promotions récupérées avec succès');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async createPromotion(req, res, next) {
+    try {
+      const promo = await menuService.createPromotion(req.body, req.user.id);
+      return sendSuccess(res, { promo }, 'Offre promotionnelle créée avec succès', 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updatePromotion(req, res, next) {
+    try {
+      const promo = await menuService.updatePromotion(req.params.id, req.body, req.user.id);
+      return sendSuccess(res, { promo }, 'Offre promotionnelle mise à jour avec succès');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async deletePromotion(req, res, next) {
+    try {
+      await menuService.deletePromotion(req.params.id, req.user.id);
+      return sendSuccess(res, {}, 'Offre promotionnelle supprimée avec succès');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // JOURNAL D'AUDIT (AUDIT LOGS)
+  async getAuditLogs(req, res, next) {
+    try {
+      const { page = 1, limit = 30, action, actorId } = req.query;
+      const { logs, total } = await settingsService.getAuditLogs({ page, limit, action, actorId });
+      return sendPaginated(res, logs, { total, page, limit }, 'Journal d\'audit récupéré avec succès');
     } catch (error) {
       next(error);
     }

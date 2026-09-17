@@ -35,6 +35,64 @@ class AuthController {
     }
   }
 
+  async registerAdmin(req, res, next) {
+    try {
+      const { name, email, phone, password, privateKey } = req.body;
+      const ipAddress = req.ip || req.connection.remoteAddress;
+
+      const result = await authService.registerAdmin({
+        name,
+        email,
+        phone,
+        password,
+        privateKey,
+        ipAddress
+      });
+
+      res.cookie('refreshToken', result.refreshToken, env.cookieOptions);
+      res.cookie('accessToken', result.accessToken, {
+        ...env.cookieOptions,
+        maxAge: 15 * 60 * 1000 // 15 minutes
+      });
+
+      return sendSuccess(
+        res,
+        {
+          user: result.user,
+          accessToken: result.accessToken
+        },
+        'Compte administrateur créé avec succès',
+        201
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async refreshToken(req, res, next) {
+    try {
+      const token = req.cookies?.refreshToken || req.body.refreshToken;
+      const result = await authService.refreshToken(token);
+
+      res.cookie('refreshToken', result.refreshToken, env.cookieOptions);
+      res.cookie('accessToken', result.accessToken, {
+        ...env.cookieOptions,
+        maxAge: 15 * 60 * 1000 // 15 minutes
+      });
+
+      return sendSuccess(
+        res,
+        {
+          user: result.user,
+          accessToken: result.accessToken
+        },
+        'Session rafraîchie avec succès'
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async logout(req, res, next) {
     try {
       if (req.user && req.user.id) {
