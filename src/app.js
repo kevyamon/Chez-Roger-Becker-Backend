@@ -19,6 +19,7 @@ const publicRoutes = require('./routes/public.routes');
 const orderRoutes = require('./routes/order.routes');
 const driverRoutes = require('./routes/driver.routes');
 const adminRoutes = require('./routes/admin.routes');
+const notificationRoutes = require('./routes/notification.routes');
 
 const app = express();
 
@@ -65,6 +66,7 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/orders', orderRoutes);
 app.use('/api/v1/driver', driverRoutes);
 app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1', publicRoutes);
 
 // 7. Capture des routes inexistantes (404)

@@ -6,6 +6,9 @@
 .env.production.local
 .env*.local
 *.env
+serviceAccountKey.json
+*serviceAccount*.json
+*firebase-adminsdk*.json
 
 # Autoriser uniquement le template .env.example
 !.env.example

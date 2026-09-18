@@ -1,6 +1,6 @@
 /**
  * Utilitaire de calcul de l'état d'ouverture en direct du restaurant.
- * Analyse les plages horaires configurées par l'administrateur et l'état d'ouverture en base.
+ * Analyse les plages horaires configurées par l'administrateur et le levier manuel d'ouverture.
  */
 
 const DAYS_MAP = {
@@ -28,26 +28,36 @@ const parseTimeToMinutes = (timeStr) => {
 
 /**
  * Détermine si le restaurant est ouvert en temps réel selon les paramètres administrateur en base.
+ * Priorité absolue au levier manuel : si isOpen est false, le restaurant est fermé.
+ * Si isOpen est true, l'horaire configuré en base est évalué dynamiquement.
+ *
  * @param {Object} restaurant - Document RestaurantSettings.
  * @param {Date} [evalDate] - Date à évaluer.
- * @returns {{ isOpen: boolean, statusText: string, reason: string }}
+ * @returns {{ isOpen: boolean, isManuallyClosed: boolean, statusText: string, reason: string, openingHours: string }}
  */
 const checkIsRestaurantOpen = (restaurant = {}, evalDate = new Date()) => {
+  const openingHours = restaurant?.openingHours || 'Mardi – Dimanche : 11h00 – 23h00 (Fermé le lundi)';
+
+  // 1. Levier manuel : Si la direction a fermé manuellement le restaurant
   if (restaurant?.isOpen === false) {
     return {
       isOpen: false,
+      isManuallyClosed: true,
       statusText: 'Nous sommes fermés',
-      reason: restaurant.closedMessage || 'Fermé par la direction'
+      reason: restaurant.closedMessage || 'Fermé manuellement par la direction',
+      openingHours
     };
   }
 
-  const openingHours = restaurant?.openingHours;
+  // 2. Évaluation des horaires d'ouverture
   if (!openingHours || typeof openingHours !== 'string' || !openingHours.trim()) {
     const defaultOpen = restaurant?.isOpen !== false;
     return {
       isOpen: defaultOpen,
+      isManuallyClosed: false,
       statusText: defaultOpen ? 'Nous sommes ouverts' : 'Nous sommes fermés',
-      reason: ''
+      reason: defaultOpen ? 'Ouvert' : 'Fermé',
+      openingHours: ''
     };
   }
 
@@ -59,20 +69,22 @@ const checkIsRestaurantOpen = (restaurant = {}, evalDate = new Date()) => {
   const currentDay = evalDate.getDay();
   const currentMinutes = evalDate.getHours() * 60 + evalDate.getMinutes();
 
-  // Jours de fermeture explicite (ex: "ferme le lundi")
+  // Vérification du jour de fermeture explicite (ex: "fermé le lundi")
   const closedMatch = normalized.match(/ferme\s+le\s+([a-z]+)/i);
   if (closedMatch) {
     const closedDayName = closedMatch[1].trim();
     if (DAYS_MAP[closedDayName] !== undefined && DAYS_MAP[closedDayName] === currentDay) {
       return {
         isOpen: false,
+        isManuallyClosed: false,
         statusText: 'Nous sommes fermés',
-        reason: `Fermé le ${closedDayName}`
+        reason: `Fermé le ${closedDayName}`,
+        openingHours
       };
     }
   }
 
-  // Plage horaire (ex: "11h00 - 23h00")
+  // Vérification de la plage horaire (ex: "11h00 - 23h00")
   const timeRangeMatch = normalized.match(/(\d{1,2}(?:[h:]\d{2})?)\s*(?:[-–—]|a|to)\s*(\d{1,2}(?:[h:]\d{2})?)/i);
   if (timeRangeMatch) {
     const startMinutes = parseTimeToMinutes(timeRangeMatch[1]);
@@ -83,16 +95,21 @@ const checkIsRestaurantOpen = (restaurant = {}, evalDate = new Date()) => {
         const isWithin = currentMinutes >= startMinutes && currentMinutes < endMinutes;
         return {
           isOpen: isWithin,
+          isManuallyClosed: false,
           statusText: isWithin ? 'Nous sommes ouverts' : 'Nous sommes fermés',
-          reason: isWithin ? 'Dans la plage horaire' : 'En dehors des horaires d\'ouverture'
+          reason: isWithin ? 'Dans la plage horaire d\'ouverture' : 'En dehors des horaires d\'ouverture',
+          openingHours
         };
       }
 
+      // Plage nocturne (ex: 18h00 - 02h00)
       const isWithinOvernight = currentMinutes >= startMinutes || currentMinutes < endMinutes;
       return {
         isOpen: isWithinOvernight,
+        isManuallyClosed: false,
         statusText: isWithinOvernight ? 'Nous sommes ouverts' : 'Nous sommes fermés',
-        reason: isWithinOvernight ? 'Dans la plage horaire' : 'En dehors des horaires d\'ouverture'
+        reason: isWithinOvernight ? 'Dans la plage horaire d\'ouverture' : 'En dehors des horaires d\'ouverture',
+        openingHours
       };
     }
   }
@@ -100,8 +117,10 @@ const checkIsRestaurantOpen = (restaurant = {}, evalDate = new Date()) => {
   const fallbackOpen = restaurant?.isOpen !== false;
   return {
     isOpen: fallbackOpen,
+    isManuallyClosed: false,
     statusText: fallbackOpen ? 'Nous sommes ouverts' : 'Nous sommes fermés',
-    reason: ''
+    reason: fallbackOpen ? 'Ouvert' : 'Fermé',
+    openingHours
   };
 };
 

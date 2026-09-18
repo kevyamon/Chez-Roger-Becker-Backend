@@ -8,10 +8,14 @@ const app = require('./app');
 const env = require('./config/environment');
 const { connectDatabase, disconnectDatabase } = require('./config/database');
 const { initSocket } = require('./sockets/socketHandler');
+const cleanupService = require('./services/cleanup.service');
 
 const startServer = async () => {
   // 1. Connexion a MongoDB
   await connectDatabase();
+
+  // 1.1 Initialisation de la purge et consolidation des statistiques (30 jours)
+  cleanupService.initScheduledCleanup();
 
   // 2. Creation du serveur HTTP
   const server = http.createServer(app);

@@ -1,5 +1,5 @@
 /**
- * Routes dediees a l'administration du restaurant (/api/v1/admin).
+ * Routes dédiées à l'administration du restaurant (/api/v1/admin).
  */
 
 const express = require('express');
@@ -7,12 +7,16 @@ const router = express.Router();
 const adminController = require('../controllers/admin.controller');
 const { authenticate, requireAdmin } = require('../middleware/authMiddleware');
 const { validateRequest } = require('../middleware/validateRequest');
+const { uploadImageMiddleware } = require('../middleware/upload');
 const { createCategorySchema, updateCategorySchema, createDishSchema, updateDishSchema, createPromotionSchema, updatePromotionSchema } = require('../validators/menu.validator');
 const { createDriverSchema, updateDriverSchema } = require('../validators/auth.validator');
 const { updateOrderStatusSchema, updateSettingsSchema } = require('../validators/order.validator');
 
 // Protection absolue de l'espace administration
 router.use(authenticate, requireAdmin);
+
+// Téléversement d'images sur Cloudinary (Galerie)
+router.post('/upload', uploadImageMiddleware, adminController.uploadImage);
 
 // Dashboard KPI
 router.get('/dashboard', adminController.getDashboard);
@@ -23,7 +27,7 @@ router.post('/dishes', validateRequest(createDishSchema), adminController.create
 router.patch('/dishes/:id', validateRequest(updateDishSchema), adminController.updateDish);
 router.delete('/dishes/:id', adminController.deleteDish);
 
-// Gestion des categories
+// Gestion des catégories
 router.get('/categories', adminController.getCategories);
 router.post('/categories', validateRequest(createCategorySchema), adminController.createCategory);
 router.patch('/categories/:id', validateRequest(updateCategorySchema), adminController.updateCategory);
@@ -31,6 +35,7 @@ router.delete('/categories/:id', adminController.deleteCategory);
 
 // Gestion des commandes
 router.get('/orders', adminController.getOrders);
+router.get('/orders-history', adminController.getOrdersHistory);
 router.get('/orders/:id', adminController.getOrderById);
 router.patch('/orders/:id/status', validateRequest(updateOrderStatusSchema), adminController.updateOrderStatus);
 
@@ -45,7 +50,7 @@ router.post('/promotions', validateRequest(createPromotionSchema), adminControll
 router.patch('/promotions/:id', validateRequest(updatePromotionSchema), adminController.updatePromotion);
 router.delete('/promotions/:id', adminController.deletePromotion);
 
-// Parametres du restaurant
+// Paramètres du restaurant
 router.get('/settings', adminController.getSettings);
 router.patch('/settings', validateRequest(updateSettingsSchema), adminController.updateSettings);
 

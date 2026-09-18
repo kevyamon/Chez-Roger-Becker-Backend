@@ -1,11 +1,12 @@
 /**
  * Contrôleur d'administration du restaurant (AdminController).
- * Gestion complète du dashboard, catalogue, commandes, livreurs et paramètres avec diffusion temps réel.
+ * Gestion du dashboard, catalogue, commandes, livreurs, téléversement Cloudinary et paramètres.
  */
 
 const settingsService = require('../services/settings.service');
 const menuService = require('../services/menu.service');
 const orderService = require('../services/order.service');
+const uploadService = require('../services/upload.service');
 const Order = require('../models/order.model');
 const { sendSuccess, sendPaginated } = require('../utils/responseHelper');
 
@@ -15,6 +16,21 @@ class AdminController {
     try {
       const data = await settingsService.getDashboardKPIs();
       return sendSuccess(res, data, 'Indicateurs du tableau de bord chargés');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // TÉLÉVERSEMENT D'IMAGE (CLOUDINARY)
+  async uploadImage(req, res, next) {
+    try {
+      if (!req.file) {
+        const error = new Error('Veuillez sélectionner un fichier image valide depuis votre galerie.');
+        error.statusCode = 400;
+        throw error;
+      }
+      const result = await uploadService.uploadImageFromBuffer(req.file.buffer);
+      return sendSuccess(res, result, 'Image téléversée avec succès sur Cloudinary', 201);
     } catch (error) {
       next(error);
     }
@@ -251,7 +267,17 @@ class AdminController {
       next(error);
     }
   }
+
+  // HISTORIQUE DES COMMANDES LIVRÉES
+  async getOrdersHistory(req, res, next) {
+    try {
+      const { page = 1, limit = 20, search, date } = req.query;
+      const { orders, total } = await settingsService.getCompletedOrdersHistory({ page, limit, search, date });
+      return sendPaginated(res, orders, { total, page, limit }, 'Historique des commandes chargé');
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = new AdminController();
-

@@ -1,6 +1,6 @@
 /**
- * Modele Mongoose pour les parametres globaux du restaurant Chez Roger Becker.
- * Gere les coordonnees, les horaires, les frais de livraison et l'etat d'ouverture du restaurant.
+ * Modèle Mongoose pour les paramètres globaux du restaurant Chez Roger Becker.
+ * Gère les coordonnées, les horaires, les frais de livraison et l'état d'ouverture du restaurant.
  */
 
 const mongoose = require('mongoose');
@@ -36,7 +36,7 @@ const restaurantSettingsSchema = new mongoose.Schema(
     },
     openingHours: {
       type: String,
-      default: 'Mardi - Dimanche : 11h00 - 23h00 (Fermé le lundi)',
+      default: 'Mardi – Dimanche : 11h00 – 23h00 (Fermé le lundi)',
       trim: true
     },
     deliveryFee: {
@@ -72,7 +72,7 @@ const restaurantSettingsSchema = new mongoose.Schema(
   }
 );
 
-// Methode statique pour recuperer les reglages (pattern document unique)
+// Méthode statique pour récupérer les réglages (pattern document unique)
 restaurantSettingsSchema.statics.getSettings = async function () {
   let settings = await this.findOne();
   if (!settings) {

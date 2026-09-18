@@ -1,50 +1,44 @@
 /**
  * Service central de gestion des commandes (OrderService).
- * Applique la logique Forteresse : recalcul total cote serveur, verification de disponibilite et gestion d'etat.
+ * Applique la logique Forteresse : recalcul total côté serveur, vérification d'ouverture et notifications push.
  */
 
 const Order = require('../models/order.model');
 const Dish = require('../models/dish.model');
 const RestaurantSettings = require('../models/restaurantSettings.model');
 const AuditLog = require('../models/auditLog.model');
+const notificationService = require('./notification.service');
 const { generateTrackingToken, generateOrderNumber } = require('../utils/tokenGenerator');
 const { checkIsRestaurantOpen } = require('../utils/scheduleHelper');
 const { OrderStatus, AllowedOrderTransitions, ErrorCodes } = require('../constants/enums');
 
 class OrderService {
   /**
-   * Creation securisee d'une nouvelle commande client.
+   * Création sécurisée d'une nouvelle commande client.
    */
   async createOrder(orderPayload, socketEmitter = null) {
-    // 1. Verification du statut et des horaires d'ouverture du restaurant
     const settings = await RestaurantSettings.getSettings();
     const status = checkIsRestaurantOpen(settings);
     if (!status.isOpen) {
-      const error = new Error(settings.closedMessage || status.reason || 'Le restaurant est actuellement fermé.');
+      const error = new Error(
+        settings.closedMessage || status.reason || 'La commande n\'est pas possible actuellement car le restaurant est fermé.'
+      );
       error.statusCode = 400;
       error.code = ErrorCodes.RESTAURANT_CLOSED;
       throw error;
     }
 
-    // 2. Chargement des plats depuis la base de donnees
     const dishIds = orderPayload.items.map((i) => i.dishId);
     const dishes = await Dish.find({ _id: { $in: dishIds } }).lean();
     const dishMap = new Map(dishes.map((d) => [d._id.toString(), d]));
 
-    // 3. Verification de l'existence et disponibilite des plats + Recalcul des montants
     let subtotal = 0;
     const verifiedItems = [];
 
     for (const item of orderPayload.items) {
       const dish = dishMap.get(item.dishId);
-      if (!dish) {
-        const error = new Error(`Le plat selectionne n existe plus.`);
-        error.statusCode = 404;
-        error.code = ErrorCodes.DISH_UNAVAILABLE;
-        throw error;
-      }
-      if (!dish.isAvailable) {
-        const error = new Error(`Le plat "${dish.name}" est actuellement epuise.`);
+      if (!dish || !dish.isAvailable) {
+        const error = new Error(`Le plat sélectionné n'est pas disponible.`);
         error.statusCode = 400;
         error.code = ErrorCodes.DISH_UNAVAILABLE;
         throw error;
@@ -68,12 +62,9 @@ class OrderService {
 
     const deliveryFee = settings.deliveryFee || 1000;
     const total = subtotal + deliveryFee;
-
-    // 4. Generation d'identifiants uniques et securises
     const orderNumber = generateOrderNumber();
     const trackingToken = generateTrackingToken();
 
-    // 5. Persistance en base de donnees
     const order = await Order.create({
       orderNumber,
       trackingToken,
@@ -88,50 +79,64 @@ class OrderService {
         method: orderPayload.paymentMethod || 'CASH_ON_DELIVERY',
         status: 'PENDING'
       },
-      statusHistory: [
-        {
-          status: OrderStatus.PENDING,
-          changedBy: 'CUSTOMER',
-          changedAt: new Date(),
-          note: 'Commande recue par le restaurant'
-        }
-      ]
+      statusHistory: [{
+        status: OrderStatus.PENDING,
+        changedBy: 'CUSTOMER',
+        changedAt: new Date(),
+        note: 'Commande reçue par le restaurant'
+      }]
     });
 
-    // 6. Notification en temps reel
-    if (socketEmitter) {
-      socketEmitter.emitToAdmin('order:created', order);
-    }
+    if (socketEmitter) socketEmitter.emitToAdmin('order:created', order);
+
+    // Notification Push vers les administrateurs
+    notificationService.notifyAdmins({
+      title: `Nouvelle commande #${order.orderNumber} !`,
+      body: `Montant : ${order.total} FCFA — Client : ${order.customer.name}`,
+      data: { orderId: order._id.toString(), orderNumber: order.orderNumber, type: 'ORDER_CREATED' },
+      url: '/admin'
+    }).catch(() => {});
 
     return order;
   }
 
   /**
-   * Suivi public d'une commande via son trackingToken unique ou son numéro de commande (ex: RB-XXXXXX).
+   * Suivi public d'une commande via trackingToken ou numéro.
    */
   async trackOrderByToken(identifier) {
     const cleanId = (identifier || '').trim();
     const order = await Order.findOne({
-      $or: [
-        { trackingToken: cleanId },
-        { orderNumber: cleanId.toUpperCase() }
-      ]
+      $or: [{ trackingToken: cleanId }, { orderNumber: cleanId.toUpperCase() }]
     })
-      .select('-customer.phone') // Masquage partiel sécurisé
+      .select('-customer.phone')
       .populate('driverId', 'firstName lastName phone')
       .lean();
 
     if (!order) {
-      const error = new Error('Commande introuvable avec ce numéro ou lien de suivi.');
+      const error = new Error('Commande introuvable.');
       error.statusCode = 404;
       error.code = ErrorCodes.ORDER_NOT_FOUND;
       throw error;
     }
-    return order;
+
+    const settings = await RestaurantSettings.getSettings();
+    const storeStatus = checkIsRestaurantOpen(settings);
+
+    return {
+      ...order,
+      restaurantStatus: {
+        isOpen: storeStatus.isOpen,
+        isManuallyClosed: storeStatus.isManuallyClosed,
+        statusText: storeStatus.statusText,
+        reason: storeStatus.reason,
+        closedMessage: settings.closedMessage,
+        openingHours: settings.openingHours
+      }
+    };
   }
 
   /**
-   * Transition d'etat controlee par la machine a etats.
+   * Transition d'état et déclenchement des notifications.
    */
   async updateOrderStatus(orderId, newStatus, actorId, actorRole, note = '', socketEmitter = null) {
     const order = await Order.findById(orderId);
@@ -144,7 +149,6 @@ class OrderService {
 
     const currentStatus = order.status;
     const allowedNext = AllowedOrderTransitions[currentStatus] || [];
-
     if (!allowedNext.includes(newStatus)) {
       const error = new Error(`Transition interdite de ${currentStatus} vers ${newStatus}.`);
       error.statusCode = 400;
@@ -159,7 +163,6 @@ class OrderService {
       changedAt: new Date(),
       note
     });
-
     await order.save();
 
     await AuditLog.create({
@@ -183,16 +186,50 @@ class OrderService {
       socketEmitter.emitToOrder(order.trackingToken, 'order:status-changed', statusPayload);
       socketEmitter.emitGlobal('order:status-changed', statusPayload);
       socketEmitter.emitToAdmin('order:updated', order);
-      if (newStatus === OrderStatus.READY_FOR_PICKUP) {
-        socketEmitter.emitToDrivers('order:available', order);
-      }
+      if (newStatus === OrderStatus.READY_FOR_PICKUP) socketEmitter.emitToDrivers('order:available', order);
     }
 
+    this._sendPushForStatus(order, newStatus, note);
     return order;
   }
 
   /**
-   * Recuperation des commandes avec pagination et filtres pour l'administration.
+   * Émission ciblée des notifications push selon le statut.
+   */
+  _sendPushForStatus(order, status, note = '') {
+    const tracking = order.trackingToken;
+    const num = order.orderNumber;
+
+    if (status === OrderStatus.CONFIRMED) {
+      notificationService.notifyCustomerByTrackingToken(tracking, {
+        title: `Commande #${num} confirmée !`,
+        body: 'Votre commande a été confirmée et est en préparation.',
+        data: { orderId: order._id.toString(), status }
+      }).catch(() => {});
+    } else if (status === OrderStatus.READY_FOR_PICKUP) {
+      notificationService.notifyDrivers({
+        title: `Nouvelle course #${num} disponible !`,
+        body: `Prête en cuisine chez Roger Becker.`,
+        data: { orderId: order._id.toString(), type: 'ORDER_READY' },
+        url: '/driver'
+      }).catch(() => {});
+
+      notificationService.notifyCustomerByTrackingToken(tracking, {
+        title: `Commande #${num} prête !`,
+        body: 'Votre repas est prêt et attend le livreur.',
+        data: { orderId: order._id.toString(), status }
+      }).catch(() => {});
+    } else if (status === OrderStatus.CANCELLED) {
+      notificationService.notifyCustomerByTrackingToken(tracking, {
+        title: `Commande #${num} annulée`,
+        body: note || 'Votre commande a été annulée par le restaurant.',
+        data: { orderId: order._id.toString(), status }
+      }).catch(() => {});
+    }
+  }
+
+  /**
+   * Récupération des commandes avec pagination et filtres pour l'administration.
    */
   async getAdminOrders({ status, driverId, search, date, page = 1, limit = 20 }) {
     const query = {};

@@ -1,17 +1,26 @@
 /**
- * Service de gestion des parametres du restaurant, indicateurs KPI et livreurs (SettingsService).
+ * Service de gestion des paramètres du restaurant, indicateurs KPI et livreurs (SettingsService).
  */
 
 const bcrypt = require('bcryptjs');
 const RestaurantSettings = require('../models/restaurantSettings.model');
 const Order = require('../models/order.model');
+const DailyStat = require('../models/dailyStat.model');
 const User = require('../models/user.model');
 const AuditLog = require('../models/auditLog.model');
+const { checkIsRestaurantOpen } = require('../utils/scheduleHelper');
 const { OrderStatus, UserRole, ErrorCodes } = require('../constants/enums');
 
 class SettingsService {
   async getSettings() {
-    return RestaurantSettings.getSettings();
+    const settings = await RestaurantSettings.getSettings();
+    const status = checkIsRestaurantOpen(settings);
+    return {
+      ...settings.toObject(),
+      isEffectivelyOpen: status.isOpen,
+      statusText: status.statusText,
+      statusReason: status.reason
+    };
   }
 
   async updateSettings(data, actorId) {
@@ -32,11 +41,17 @@ class SettingsService {
       details: data
     });
 
-    return settings;
+    const status = checkIsRestaurantOpen(settings);
+    return {
+      ...settings.toObject(),
+      isEffectivelyOpen: status.isOpen,
+      statusText: status.statusText,
+      statusReason: status.reason
+    };
   }
 
   /**
-   * Calcul des indicateurs cles de performance (KPI) pour le Dashboard Admin.
+   * Calcul des indicateurs clés de performance (KPI) pour le Dashboard Admin.
    */
   async getDashboardKPIs() {
     const now = new Date();
@@ -109,7 +124,7 @@ class SettingsService {
     });
 
     if (existing) {
-      const error = new Error('Un compte livreur avec cet e-mail ou ce telephone existe deja.');
+      const error = new Error('Un compte livreur avec cet e-mail ou ce téléphone existe déjà.');
       error.statusCode = 409;
       error.code = ErrorCodes.CONFLICT;
       throw error;
@@ -183,6 +198,38 @@ class SettingsService {
     ]);
 
     return { logs, total, page, limit };
+  }
+
+  // --- HISTORIQUE DÉDIÉ DES COMMANDES LIVRÉES / TERMINÉES ---
+  async getCompletedOrdersHistory({ page = 1, limit = 20, search, date } = {}) {
+    const query = { status: { $in: [OrderStatus.DELIVERED, OrderStatus.CANCELLED] } };
+    if (search) {
+      query.$or = [
+        { orderNumber: { $regex: search.trim(), $options: 'i' } },
+        { 'customer.name': { $regex: search.trim(), $options: 'i' } },
+        { 'customer.phone': { $regex: search.trim(), $options: 'i' } }
+      ];
+    }
+    if (date) {
+      const startOfDay = new Date(date);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(date);
+      endOfDay.setHours(23, 59, 59, 999);
+      query.createdAt = { $gte: startOfDay, $lte: endOfDay };
+    }
+
+    const skip = (Number(page) - 1) * Number(limit);
+    const [orders, total] = await Promise.all([
+      Order.find(query)
+        .populate('driverId', 'firstName lastName phone')
+        .sort({ updatedAt: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+      Order.countDocuments(query)
+    ]);
+
+    return { orders, total, page, limit };
   }
 }
 
