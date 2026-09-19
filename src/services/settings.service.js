@@ -180,6 +180,36 @@ class SettingsService {
     return driver;
   }
 
+  async deleteDriver(id, actorId) {
+    const activeOrder = await Order.findOne({
+      driverId: id,
+      status: { $in: [OrderStatus.ASSIGNED, OrderStatus.PICKED_UP, OrderStatus.OUT_FOR_DELIVERY] }
+    });
+    if (activeOrder) {
+      const error = new Error('Impossible de supprimer ce livreur car il a une livraison en cours.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const driver = await User.findOneAndDelete({ _id: id, role: UserRole.DRIVER });
+    if (!driver) {
+      const error = new Error('Livreur introuvable.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    await AuditLog.create({
+      action: 'DRIVER_DELETED',
+      actorId,
+      actorRole: 'ADMIN',
+      targetModel: 'User',
+      targetId: id,
+      details: { name: `${driver.firstName} ${driver.lastName}` }
+    });
+
+    return { message: 'Livreur supprimé avec succès' };
+  }
+
   // --- JOURNAL D'AUDIT (AUDIT LOGS) ---
   async getAuditLogs({ page = 1, limit = 30, action, actorId } = {}) {
     const query = {};

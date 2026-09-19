@@ -43,6 +43,7 @@ router.patch('/orders/:id/status', validateRequest(updateOrderStatusSchema), adm
 router.get('/drivers', adminController.getDrivers);
 router.post('/drivers', validateRequest(createDriverSchema), adminController.createDriver);
 router.patch('/drivers/:id', validateRequest(updateDriverSchema), adminController.updateDriver);
+router.delete('/drivers/:id', adminController.deleteDriver);
 
 // Gestion des promotions
 router.get('/promotions', adminController.getPromotions);

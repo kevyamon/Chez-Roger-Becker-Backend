@@ -192,6 +192,17 @@ class AdminController {
     }
   }
 
+  async deleteDriver(req, res, next) {
+    try {
+      const result = await settingsService.deleteDriver(req.params.id, req.user.id);
+      const socketEmitter = req.app.get('socketEmitter');
+      if (socketEmitter) socketEmitter.emitToAdmin('driver:deleted', { driverId: req.params.id });
+      return sendSuccess(res, result, 'Livreur supprimé avec succès');
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // PARAMÈTRES (SETTINGS)
   async getSettings(req, res, next) {
     try {

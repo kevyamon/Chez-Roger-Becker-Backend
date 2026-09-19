@@ -1,8 +1,9 @@
 /**
  * Service de gestion des activités des livreurs (DriverService).
- * Gère la disponibilité, l'attribution atomique anti-concurrence et le cycle de livraison avec push.
+ * Disponibilité, acceptation concurrente, cycle de livraison, statistiques et profil.
  */
 
+const bcrypt = require('bcryptjs');
 const User = require('../models/user.model');
 const Order = require('../models/order.model');
 const AuditLog = require('../models/auditLog.model');
@@ -54,7 +55,7 @@ class DriverService {
             status: OrderStatus.ASSIGNED,
             changedBy: `DRIVER:${driverId}`,
             changedAt: new Date(),
-            note: `Course acceptée par ${driver.firstName}`
+            note: `Course acceptée par ${driver.firstName} ${driver.lastName}`
           }
         }
       },
@@ -71,24 +72,21 @@ class DriverService {
     driver.driverStatus = DriverStatus.BUSY;
     await driver.save();
 
-    await AuditLog.create({
-      action: 'ORDER_ACCEPTED_BY_DRIVER',
-      actorId: driverId,
-      actorRole: 'DRIVER',
-      targetModel: 'Order',
-      targetId: orderId,
-      details: { driverName: `${driver.firstName} ${driver.lastName}` }
-    });
-
     if (socketEmitter) {
       socketEmitter.emitToOrder(order.trackingToken, 'order:status-changed', {
         orderId: order._id,
         status: OrderStatus.ASSIGNED,
-        driver: { firstName: driver.firstName, phone: driver.phone }
+        driver: { firstName: driver.firstName, lastName: driver.lastName, phone: driver.phone }
       });
       socketEmitter.emitToAdmin('order:updated', order);
       socketEmitter.emitToDrivers('order:taken', { orderId });
     }
+
+    notificationService.notifyCustomerByTrackingToken(order.trackingToken, {
+      title: 'Livreur assigné !',
+      body: `${driver.firstName} a pris en charge votre commande et se rend au restaurant.`,
+      data: { orderId: order._id.toString(), status: OrderStatus.ASSIGNED }
+    }).catch(() => {});
 
     return order;
   }
@@ -124,6 +122,13 @@ class DriverService {
       });
       socketEmitter.emitToAdmin('order:updated', order);
     }
+
+    notificationService.notifyCustomerByTrackingToken(order.trackingToken, {
+      title: 'Repas prêt et récupéré !',
+      body: `Le livreur a récupéré votre commande #${order.orderNumber} en cuisine.`,
+      data: { orderId: order._id.toString(), status: OrderStatus.PICKED_UP }
+    }).catch(() => {});
+
     return order;
   }
 
@@ -160,7 +165,7 @@ class DriverService {
     }
 
     notificationService.notifyCustomerByTrackingToken(order.trackingToken, {
-      title: `Livreur en route !`,
+      title: 'Livreur en route vers chez vous !',
       body: `Votre commande #${order.orderNumber} est en cours d'acheminement.`,
       data: { orderId: order._id.toString(), status: OrderStatus.OUT_FOR_DELIVERY }
     }).catch(() => {});
@@ -208,14 +213,12 @@ class DriverService {
 
     const driverName = driver ? `${driver.firstName} ${driver.lastName}` : 'Le livreur';
 
-    // Notification au client
     notificationService.notifyCustomerByTrackingToken(order.trackingToken, {
-      title: `Commande livrée !`,
-      body: `Votre commande #${order.orderNumber} a été livrée. Bon appétit !`,
+      title: 'Commande livrée !',
+      body: `Votre commande #${order.orderNumber} a été livrée avec succès. Bon appétit !`,
       data: { orderId: order._id.toString(), status: OrderStatus.DELIVERED }
     }).catch(() => {});
 
-    // Notification à l'administrateur
     notificationService.notifyAdmins({
       title: `Commande #${order.orderNumber} livrée !`,
       body: `Livrée avec succès par ${driverName}.`,
@@ -243,6 +246,84 @@ class DriverService {
       Order.countDocuments(query)
     ]);
     return { orders, total, page, limit };
+  }
+
+  async getDriverStats(driverId) {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const [todayOrders, totalOrders, todayFinancials, totalFinancials] = await Promise.all([
+      Order.countDocuments({ driverId, status: OrderStatus.DELIVERED, updatedAt: { $gte: startOfToday } }),
+      Order.countDocuments({ driverId, status: OrderStatus.DELIVERED }),
+      Order.aggregate([
+        { $match: { driverId, status: OrderStatus.DELIVERED, updatedAt: { $gte: startOfToday } } },
+        { $group: { _id: null, totalCash: { $sum: '$total' } } }
+      ]),
+      Order.aggregate([
+        { $match: { driverId, status: OrderStatus.DELIVERED } },
+        { $group: { _id: null, totalCash: { $sum: '$total' } } }
+      ])
+    ]);
+
+    return {
+      todayDeliveries: todayOrders,
+      totalDeliveries: totalOrders,
+      todayCashCollected: todayFinancials[0]?.totalCash || 0,
+      totalCashCollected: totalFinancials[0]?.totalCash || 0
+    };
+  }
+
+  async updateProfile(driverId, { firstName, lastName, phone, email }) {
+    const updates = {};
+    if (firstName) updates.firstName = firstName.trim();
+    if (lastName) updates.lastName = lastName.trim();
+
+    if (email) {
+      const normalizedEmail = email.toLowerCase().trim();
+      const existing = await User.findOne({ email: normalizedEmail, _id: { $ne: driverId } });
+      if (existing) {
+        const error = new Error('Cette adresse e-mail est déjà utilisée par un autre compte.');
+        error.statusCode = 409;
+        throw error;
+      }
+      updates.email = normalizedEmail;
+    }
+
+    if (phone) {
+      const normalizedPhone = phone.trim();
+      const existing = await User.findOne({ phone: normalizedPhone, _id: { $ne: driverId } });
+      if (existing) {
+        const error = new Error('Ce numéro de téléphone est déjà utilisé.');
+        error.statusCode = 409;
+        throw error;
+      }
+      updates.phone = normalizedPhone;
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(driverId, updates, { new: true, runValidators: true });
+    return updatedUser ? updatedUser.toJSON() : null;
+  }
+
+  async changePassword(driverId, { oldPassword, newPassword }) {
+    const user = await User.findById(driverId).select('+passwordHash');
+    if (!user) {
+      const error = new Error('Compte livreur introuvable.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const isMatch = await user.comparePassword(oldPassword);
+    if (!isMatch) {
+      const error = new Error('Le mot de passe actuel est incorrect.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const salt = await bcrypt.genSalt(12);
+    user.passwordHash = await bcrypt.hash(newPassword, salt);
+    await user.save();
+
+    return { message: 'Mot de passe modifié avec succès.' };
   }
 }
 

@@ -1,5 +1,6 @@
 /**
  * Validateurs Zod pour l'authentification et les comptes livreurs / administrateurs.
+ * Contrôle strict des formats, de la longueur et normalisation des chaînes de caractères.
  */
 
 const { z } = require('zod');
@@ -64,11 +65,32 @@ const createDriverSchema = z.object({
     .toLowerCase()
     .trim(),
   password: z
-    .string({ required_error: 'Le mot de passe est obligatoire' })
-    .min(6, 'Le mot de passe doit comporter au moins 6 caractères')
+    .string({ required_error: 'Le mot de passe ou code d\'accès est obligatoire' })
+    .min(4, 'Le mot de passe ou code doit comporter au moins 4 caractères')
 });
 
-const updateDriverSchema = createDriverSchema.partial().extend({
+const updateDriverProfileSchema = z.object({
+  firstName: z.string().min(2, 'Le prénom doit comporter au moins 2 caractères').max(60).trim().optional(),
+  lastName: z.string().min(2, 'Le nom doit comporter au moins 2 caractères').max(60).trim().optional(),
+  phone: z.string().min(8, 'Numéro de téléphone invalide').trim().optional(),
+  email: z.string().email('Format d\'adresse e-mail invalide').toLowerCase().trim().optional()
+});
+
+const changePasswordSchema = z.object({
+  oldPassword: z
+    .string({ required_error: 'Le mot de passe actuel est obligatoire' })
+    .min(1, 'Veuillez saisir votre mot de passe actuel'),
+  newPassword: z
+    .string({ required_error: 'Le nouveau mot de passe est obligatoire' })
+    .min(6, 'Le nouveau mot de passe doit comporter au moins 6 caractères')
+});
+
+const updateDriverSchema = z.object({
+  firstName: z.string().min(2).max(60).trim().optional(),
+  lastName: z.string().min(2).max(60).trim().optional(),
+  phone: z.string().min(8).trim().optional(),
+  email: z.string().email().toLowerCase().trim().optional(),
+  password: z.string().min(4).optional(),
   isActive: z.boolean().optional()
 });
 
@@ -83,7 +105,8 @@ module.exports = {
   registerAdminSchema,
   refreshTokenSchema,
   createDriverSchema,
+  updateDriverProfileSchema,
+  changePasswordSchema,
   updateDriverSchema,
   updateDriverStatusSchema
 };
-
