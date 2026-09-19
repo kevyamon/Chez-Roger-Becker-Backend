@@ -1,6 +1,6 @@
 /**
- * Service d'authentification et de gestion des comptes (Admin et Livreurs).
- * Gere la generation de tokens JWT, la rotation des refresh tokens et la securite des identifiants.
+ * Service d'authentification et de gestion des sessions (Admin et Livreurs).
+ * Implémente le standard de sécurité Yély : HS256 forcé, jti unique et rotation Bcrypt.
  */
 
 const jwt = require('jsonwebtoken');
@@ -8,26 +8,37 @@ const bcrypt = require('bcryptjs');
 const User = require('../models/user.model');
 const AuditLog = require('../models/auditLog.model');
 const env = require('../config/environment');
-const { UserRole, DriverStatus, ErrorCodes } = require('../constants/enums');
+const { UserRole, ErrorCodes } = require('../constants/enums');
+const { generateJti } = require('../utils/tokenGenerator');
 
 class AuthService {
   /**
-   * Genere une paire de tokens (Access Token + Refresh Token).
+   * Génère une paire de jetons cryptographiques (Access Token + Refresh Token).
+   * @param {Object} user - Document utilisateur MongoDB.
    */
   generateTokens(user) {
-    const payload = {
+    const accessPayload = {
       id: user._id.toString(),
       role: user.role,
       email: user.email,
-      phone: user.phone
+      phone: user.phone,
+      type: 'access'
     };
 
-    const accessToken = jwt.sign(payload, env.JWT_SECRET, {
-      expiresIn: env.JWT_EXPIRES_IN
+    const accessToken = jwt.sign(accessPayload, env.JWT_SECRET, {
+      expiresIn: env.JWT_EXPIRES_IN || '15m',
+      algorithm: 'HS256'
     });
 
-    const refreshToken = jwt.sign(payload, env.REFRESH_TOKEN_SECRET, {
-      expiresIn: env.REFRESH_TOKEN_EXPIRES_IN
+    const refreshPayload = {
+      id: user._id.toString(),
+      jti: generateJti(),
+      type: 'refresh'
+    };
+
+    const refreshToken = jwt.sign(refreshPayload, env.REFRESH_TOKEN_SECRET, {
+      expiresIn: env.REFRESH_TOKEN_EXPIRES_IN || '30d',
+      algorithm: 'HS256'
     });
 
     return { accessToken, refreshToken };
@@ -59,8 +70,7 @@ class AuthService {
 
     const { accessToken, refreshToken } = this.generateTokens(user);
 
-    // Stockage haché du refresh token pour rotation sécurisée
-    const salt = await bcrypt.genSalt(10);
+    const salt = await bcrypt.genSalt(12);
     user.refreshTokenHash = await bcrypt.hash(refreshToken, salt);
     user.lastLoginAt = new Date();
     await user.save();
@@ -73,7 +83,7 @@ class AuthService {
   }
 
   /**
-   * Inscription d'un compte Administrateur protégé par la clé secrète AD_PW.
+   * Inscription d'un compte Administrateur protégé par clé privée.
    */
   async registerAdmin({ name, email, phone, password, privateKey, ipAddress }) {
     const expectedKey = (env.AD_PW || '').trim();
@@ -94,7 +104,7 @@ class AuthService {
     });
 
     if (existingUser) {
-      const error = new Error('Un utilisateur avec cette adresse e-mail ou ce numéro de téléphone existe déjà.');
+      const error = new Error('Un utilisateur avec cette adresse e-mail ou ce numéro existe déjà.');
       error.statusCode = 409;
       error.code = ErrorCodes.CONFLICT;
       throw error;
@@ -109,7 +119,7 @@ class AuthService {
       lastName,
       email: normalizedEmail,
       phone: normalizedPhone,
-      passwordHash: password, // Haché automatiquement par pre('save') à 12 rounds
+      passwordHash: password,
       role: UserRole.ADMIN,
       isActive: true,
       lastLoginAt: new Date()
@@ -117,11 +127,10 @@ class AuthService {
 
     const { accessToken, refreshToken } = this.generateTokens(user);
 
-    const salt = await bcrypt.genSalt(10);
+    const salt = await bcrypt.genSalt(12);
     user.refreshTokenHash = await bcrypt.hash(refreshToken, salt);
     await user.save();
 
-    // Journalisation d'audit de création admin
     try {
       await AuditLog.create({
         action: 'ADMIN_REGISTER',
@@ -144,7 +153,7 @@ class AuthService {
   }
 
   /**
-   * Rafraîchissement sécurisé d'access token avec rotation de refresh token.
+   * Rafraîchissement sécurisé d'access token avec rotation et anti-collision.
    */
   async refreshToken(token) {
     if (!token) {
@@ -156,9 +165,16 @@ class AuthService {
 
     let decoded;
     try {
-      decoded = jwt.verify(token, env.REFRESH_TOKEN_SECRET);
+      decoded = jwt.verify(token, env.REFRESH_TOKEN_SECRET, { algorithms: ['HS256'] });
     } catch (err) {
-      const error = new Error('Session expirée ou jeton invalide.');
+      const error = new Error('Session expirée ou jeton de rafraîchissement invalide.');
+      error.statusCode = 401;
+      error.code = ErrorCodes.UNAUTHORIZED;
+      throw error;
+    }
+
+    if (decoded.type !== 'refresh') {
+      const error = new Error('Type de jeton invalide pour cette opération.');
       error.statusCode = 401;
       error.code = ErrorCodes.UNAUTHORIZED;
       throw error;
@@ -183,7 +199,7 @@ class AuthService {
     }
 
     const { accessToken, refreshToken: newRefreshToken } = this.generateTokens(user);
-    const salt = await bcrypt.genSalt(10);
+    const salt = await bcrypt.genSalt(12);
     user.refreshTokenHash = await bcrypt.hash(newRefreshToken, salt);
     await user.save();
 
@@ -195,19 +211,20 @@ class AuthService {
   }
 
   /**
-   * Déconnexion et invalidation du refresh token.
+   * Déconnexion et révocation explicite du jeton en base de données.
    */
   async logout(userId) {
+    if (!userId) return;
     await User.findByIdAndUpdate(userId, { refreshTokenHash: null });
   }
 
   /**
-   * Récupération du profil connecté actuel.
+   * Récupération du profil de l'utilisateur connecté.
    */
   async getMe(userId) {
     const user = await User.findById(userId).lean();
     if (!user || !user.isActive) {
-      const error = new Error('Compte introuvable ou désactivé.');
+      const error = new Error('Compte utilisateur introuvable ou désactivé.');
       error.statusCode = 404;
       error.code = ErrorCodes.NOT_FOUND;
       throw error;

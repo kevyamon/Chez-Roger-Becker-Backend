@@ -1,6 +1,6 @@
 /**
- * Middlewares d'authentification et de controle d'acces base sur les roles (RBAC).
- * Verifie la validite du JWT (Bearer ou Cookie httpOnly) et le statut actif du compte.
+ * Middlewares d'authentification et de contrôle d'accès basé sur les rôles (RBAC).
+ * Vérifie la validité du JWT d'accès (Bearer ou Cookie httpOnly) et son typage strict.
  */
 
 const jwt = require('jsonwebtoken');
@@ -9,17 +9,17 @@ const { UserRole, ErrorCodes } = require('../constants/enums');
 const { sendError } = require('../utils/responseHelper');
 
 /**
- * Middleware d'authentification : valide le token et attache les donnees du compte a req.user.
+ * Middleware d'authentification : valide le jeton d'accès et injecte l'utilisateur dans req.user.
  */
 const authenticate = async (req, res, next) => {
   try {
     let token = null;
 
-    // 1. Extraction depuis l'en-tete Authorization Bearer
+    // 1. Extraction prioritaire depuis l'en-tête Authorization Bearer
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
       token = req.headers.authorization.split(' ')[1];
-    } 
-    // 2. Extraction de secours depuis le cookie signe ou non signe
+    }
+    // 2. Extraction de secours depuis le cookie httpOnly
     else if (req.cookies && req.cookies.accessToken) {
       token = req.cookies.accessToken;
     }
@@ -29,17 +29,30 @@ const authenticate = async (req, res, next) => {
         res,
         {
           code: ErrorCodes.UNAUTHORIZED,
-          message: 'Acces refuse. Authentification requise pour cette ressource.',
+          message: 'Accès refusé. Authentification requise pour cette ressource.',
           details: {}
         },
         401
       );
     }
 
-    // Verification cryptographique du token
-    const decoded = jwt.verify(token, env.JWT_SECRET);
+    // Vérification cryptographique stricte (algorithme HS256 forcé)
+    const decoded = jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'] });
 
-    // Injection securisee dans la requete
+    // Contrôle strict du type de jeton (interdit l'utilisation d'un refreshToken comme accessToken)
+    if (decoded.type && decoded.type !== 'access') {
+      return sendError(
+        res,
+        {
+          code: ErrorCodes.UNAUTHORIZED,
+          message: 'Type de jeton invalide pour cette ressource.',
+          details: {}
+        },
+        401
+      );
+    }
+
+    // Injection sécurisée dans la requête courante
     req.user = {
       id: decoded.id || decoded.userId,
       role: decoded.role,
@@ -54,7 +67,7 @@ const authenticate = async (req, res, next) => {
         res,
         {
           code: ErrorCodes.UNAUTHORIZED,
-          message: 'Votre session a expire. Veuillez vous reconnecter.',
+          message: 'Votre session a expiré. Renouvellement requis.',
           details: { expired: true }
         },
         401
@@ -65,7 +78,7 @@ const authenticate = async (req, res, next) => {
       res,
       {
         code: ErrorCodes.UNAUTHORIZED,
-        message: 'Token d authentification invalide ou corrompu.',
+        message: 'Jeton d\'authentification invalide ou corrompu.',
         details: {}
       },
       401
@@ -74,8 +87,8 @@ const authenticate = async (req, res, next) => {
 };
 
 /**
- * Middleware d'autorisation par roles stricts.
- * @param  {...string} allowedRoles - Liste des roles autorises (ADMIN, DRIVER).
+ * Middleware d'autorisation par rôles stricts.
+ * @param  {...string} allowedRoles - Liste des rôles autorisés (ADMIN, DRIVER).
  */
 const requireRole = (...allowedRoles) => {
   return (req, res, next) => {
@@ -84,7 +97,7 @@ const requireRole = (...allowedRoles) => {
         res,
         {
           code: ErrorCodes.UNAUTHORIZED,
-          message: 'Authentification prealable requise.',
+          message: 'Authentification préalable requise.',
           details: {}
         },
         401
