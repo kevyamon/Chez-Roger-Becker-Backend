@@ -5,11 +5,12 @@
 const bcrypt = require('bcryptjs');
 const RestaurantSettings = require('../models/restaurantSettings.model');
 const Order = require('../models/order.model');
-const DailyStat = require('../models/dailyStat.model');
 const User = require('../models/user.model');
 const AuditLog = require('../models/auditLog.model');
 const { checkIsRestaurantOpen } = require('../utils/scheduleHelper');
 const { OrderStatus, UserRole, ErrorCodes } = require('../constants/enums');
+
+const DRIVER_ROLES = [UserRole.DRIVER, 'DRIVER', 'driver', 'LIVREUR', 'livreur'];
 
 class SettingsService {
   async getSettings() {
@@ -112,7 +113,7 @@ class SettingsService {
 
   // --- GESTION DES LIVREURS (ADMIN) ---
   async getAllDrivers() {
-    return User.find({ role: UserRole.DRIVER })
+    return User.find({ role: { $in: DRIVER_ROLES } })
       .select('-passwordHash -refreshTokenHash')
       .sort({ createdAt: -1 })
       .lean();
@@ -156,7 +157,7 @@ class SettingsService {
     }
 
     const driver = await User.findOneAndUpdate(
-      { _id: id, role: UserRole.DRIVER },
+      { _id: id, role: { $in: DRIVER_ROLES } },
       updateData,
       { new: true, runValidators: true }
     );
@@ -191,7 +192,7 @@ class SettingsService {
       throw error;
     }
 
-    const driver = await User.findOneAndDelete({ _id: id, role: UserRole.DRIVER });
+    const driver = await User.findOneAndDelete({ _id: id, role: { $in: DRIVER_ROLES } });
     if (!driver) {
       const error = new Error('Livreur introuvable.');
       error.statusCode = 404;
