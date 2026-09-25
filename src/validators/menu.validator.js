@@ -76,21 +76,33 @@ const updateDishSchema = createDishSchema.partial();
 const createPromotionSchema = z.object({
   title: z
     .string({ required_error: 'Le titre de la promotion est obligatoire' })
-    .min(2)
-    .max(100)
+    .min(2, 'Le titre doit comporter au moins 2 caractères')
+    .max(100, 'Le titre ne peut pas dépasser 100 caractères')
     .trim(),
   description: z
-    .string({ required_error: 'La description de la promotion est obligatoire' })
-    .min(5)
-    .max(500)
-    .trim(),
+    .string()
+    .max(500, 'La description ne peut pas dépasser 500 caractères')
+    .trim()
+    .optional()
+    .default(''),
   image: z.string().optional().default(''),
-  type: z.nativeEnum(PromotionType, {
-    errorMap: () => ({ message: 'Type de promotion invalide' })
-  }),
+  link: z
+    .string()
+    .max(300, 'Le lien ne peut pas dépasser 300 caractères')
+    .trim()
+    .optional()
+    .default(''),
+  type: z
+    .nativeEnum(PromotionType, {
+      errorMap: () => ({ message: 'Type de promotion invalide' })
+    })
+    .optional()
+    .default(PromotionType.ANNOUNCEMENT),
   value: z
-    .number({ required_error: 'La valeur de la promotion est obligatoire' })
-    .min(0, 'La valeur ne peut pas être négative'),
+    .number()
+    .min(0, 'La valeur ne peut pas être négative')
+    .optional()
+    .default(0),
   dishId: z
     .string()
     .regex(/^[0-9a-fA-F]{24}$/, 'Identifiant de plat invalide')

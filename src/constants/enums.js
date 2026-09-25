@@ -29,7 +29,8 @@ const OrderStatus = Object.freeze({
 const PromotionType = Object.freeze({
   PERCENTAGE: 'PERCENTAGE',
   FIXED_AMOUNT: 'FIXED_AMOUNT',
-  PROMOTIONAL_PRICE: 'PROMOTIONAL_PRICE'
+  PROMOTIONAL_PRICE: 'PROMOTIONAL_PRICE',
+  ANNOUNCEMENT: 'ANNOUNCEMENT'
 });
 
 const PaymentMethod = Object.freeze({

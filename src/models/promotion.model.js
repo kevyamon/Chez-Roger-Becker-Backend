@@ -15,25 +15,31 @@ const promotionSchema = new mongoose.Schema(
     },
     description: {
       type: String,
-      required: [true, 'La description de l offre est obligatoire'],
+      default: '',
       trim: true,
-      maxlength: [500, 'La description ne peut pas depasser 500 caracteres']
+      maxlength: [500, 'La description ne peut pas dépasser 500 caractères']
     },
     image: {
       type: String,
       default: '',
       trim: true
     },
+    link: {
+      type: String,
+      default: '',
+      trim: true,
+      maxlength: [300, 'Le lien ne peut pas dépasser 300 caractères']
+    },
     type: {
       type: String,
       enum: Object.values(PromotionType),
-      default: PromotionType.PROMOTIONAL_PRICE,
+      default: PromotionType.ANNOUNCEMENT,
       required: true
     },
     value: {
       type: Number,
-      required: [true, 'La valeur de la promotion est obligatoire'],
-      min: [0, 'La valeur ne peut pas etre negative']
+      default: 0,
+      min: [0, 'La valeur ne peut pas être négative']
     },
     dishId: {
       type: mongoose.Schema.Types.ObjectId,

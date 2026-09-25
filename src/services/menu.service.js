@@ -196,6 +196,9 @@ class MenuService {
 
   async createPromotion(data, actorId) {
     const promo = await Promotion.create(data);
+    if (promo.dishId) {
+      await promo.populate('dishId', 'name price image category');
+    }
     await AuditLog.create({
       action: 'PROMOTION_CREATED',
       actorId,
@@ -208,7 +211,7 @@ class MenuService {
   }
 
   async updatePromotion(id, data, actorId) {
-    const promo = await Promotion.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+    const promo = await Promotion.findByIdAndUpdate(id, data, { new: true, runValidators: true }).populate('dishId', 'name price image category');
     if (!promo) {
       const error = new Error('Promotion introuvable');
       error.statusCode = 404;
