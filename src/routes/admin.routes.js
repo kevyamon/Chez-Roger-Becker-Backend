@@ -25,12 +25,14 @@ router.get('/dashboard', adminController.getDashboard);
 router.get('/dishes', adminController.getDishes);
 router.post('/dishes', validateRequest(createDishSchema), adminController.createDish);
 router.patch('/dishes/:id', validateRequest(updateDishSchema), adminController.updateDish);
+router.put('/dishes/:id', validateRequest(updateDishSchema), adminController.updateDish);
 router.delete('/dishes/:id', adminController.deleteDish);
 
 // Gestion des catégories
 router.get('/categories', adminController.getCategories);
 router.post('/categories', validateRequest(createCategorySchema), adminController.createCategory);
 router.patch('/categories/:id', validateRequest(updateCategorySchema), adminController.updateCategory);
+router.put('/categories/:id', validateRequest(updateCategorySchema), adminController.updateCategory);
 router.delete('/categories/:id', adminController.deleteCategory);
 
 // Gestion des commandes
