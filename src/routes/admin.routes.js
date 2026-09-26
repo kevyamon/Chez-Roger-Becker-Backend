@@ -5,6 +5,7 @@
 const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/admin.controller');
+const adminOrderController = require('../controllers/adminOrder.controller');
 const { authenticate, requireAdmin } = require('../middleware/authMiddleware');
 const { validateRequest } = require('../middleware/validateRequest');
 const { uploadImageMiddleware } = require('../middleware/upload');
@@ -40,6 +41,9 @@ router.get('/orders', adminController.getOrders);
 router.get('/orders-history', adminController.getOrdersHistory);
 router.get('/orders/:id', adminController.getOrderById);
 router.patch('/orders/:id/status', validateRequest(updateOrderStatusSchema), adminController.updateOrderStatus);
+router.patch('/orders/:id/viewed', adminOrderController.markAsViewed);
+router.patch('/orders/mark-all-viewed', adminOrderController.markAllAsViewed);
+router.post('/orders/:id/assign-driver', adminOrderController.assignDriver);
 
 // Gestion des livreurs
 router.get('/drivers', adminController.getDrivers);

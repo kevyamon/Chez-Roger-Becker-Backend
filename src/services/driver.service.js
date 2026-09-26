@@ -31,10 +31,14 @@ class DriverService {
     return driver;
   }
 
-  async getAvailableOrders() {
-    return Order.find({ status: OrderStatus.READY_FOR_PICKUP, driverId: null })
-      .sort({ createdAt: 1 })
-      .lean();
+  async getAvailableOrders(driverId = null) {
+    const query = { status: OrderStatus.READY_FOR_PICKUP };
+    if (driverId) {
+      query.$or = [{ driverId: null }, { driverId }];
+    } else {
+      query.driverId = null;
+    }
+    return Order.find(query).sort({ createdAt: 1 }).lean();
   }
 
   async acceptOrder(orderId, driverId, socketEmitter = null) {
@@ -47,7 +51,11 @@ class DriverService {
     }
 
     const order = await Order.findOneAndUpdate(
-      { _id: orderId, status: OrderStatus.READY_FOR_PICKUP, driverId: null },
+      {
+        _id: orderId,
+        status: OrderStatus.READY_FOR_PICKUP,
+        $or: [{ driverId: null }, { driverId }]
+      },
       {
         $set: { status: OrderStatus.ASSIGNED, driverId },
         $push: {

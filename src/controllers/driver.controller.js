@@ -10,7 +10,7 @@ class DriverController {
   async getDashboard(req, res, next) {
     try {
       const activeDeliveries = await driverService.getActiveDeliveries(req.user.id);
-      const availableOrders = await driverService.getAvailableOrders();
+      const availableOrders = await driverService.getAvailableOrders(req.user.id);
       const stats = await driverService.getDriverStats(req.user.id);
 
       return sendSuccess(
@@ -30,7 +30,7 @@ class DriverController {
 
   async getAvailableOrders(req, res, next) {
     try {
-      const orders = await driverService.getAvailableOrders();
+      const orders = await driverService.getAvailableOrders(req.user.id);
       return sendSuccess(res, { orders }, 'Commandes disponibles récupérées');
     } catch (error) {
       next(error);

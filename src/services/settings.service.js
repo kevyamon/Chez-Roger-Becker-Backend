@@ -65,6 +65,7 @@ class SettingsService {
       ordersToday,
       ordersWeek,
       pendingCount,
+      unviewedCount,
       preparingCount,
       inDeliveryCount,
       deliveredCount,
@@ -76,15 +77,12 @@ class SettingsService {
       Order.countDocuments({ createdAt: { $gte: startOfToday } }),
       Order.countDocuments({ createdAt: { $gte: startOfWeek } }),
       Order.countDocuments({ status: OrderStatus.PENDING }),
+      Order.countDocuments({ isViewedByAdmin: false, status: { $ne: OrderStatus.CANCELLED } }),
       Order.countDocuments({ status: { $in: [OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY_FOR_PICKUP] } }),
       Order.countDocuments({ status: { $in: [OrderStatus.ASSIGNED, OrderStatus.PICKED_UP, OrderStatus.OUT_FOR_DELIVERY] } }),
       Order.countDocuments({ status: OrderStatus.DELIVERED }),
       Order.countDocuments({ status: OrderStatus.CANCELLED }),
-      Order.find()
-        .populate('driverId', 'firstName lastName phone')
-        .sort({ createdAt: -1 })
-        .limit(10)
-        .lean(),
+      Order.find().populate('driverId', 'firstName lastName phone').sort({ createdAt: -1 }).limit(10).lean(),
       Order.aggregate([
         { $match: { createdAt: { $gte: startOfToday }, status: { $ne: OrderStatus.CANCELLED } } },
         { $group: { _id: null, totalRevenue: { $sum: '$total' } } }
@@ -102,6 +100,7 @@ class SettingsService {
         revenueToday: financialsToday[0]?.totalRevenue || 0,
         revenueWeek: financialsWeek[0]?.totalRevenue || 0,
         pendingCount,
+        unviewedCount,
         preparingCount,
         inDeliveryCount,
         deliveredCount,

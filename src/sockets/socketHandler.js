@@ -22,6 +22,13 @@ const initSocket = (io) => {
       }
     });
 
+    // 4. Rejoindre le salon individuel d'un livreur pour assignations ciblées
+    socket.on('join:driver', (driverId) => {
+      if (driverId) {
+        socket.join(`driver_${driverId}`);
+      }
+    });
+
     socket.on('disconnect', () => {
       // Déconnexion propre sans log excessif
     });
@@ -34,6 +41,9 @@ const initSocket = (io) => {
     },
     emitToDrivers: (event, data) => {
       io.to('drivers').emit(event, data);
+    },
+    emitToDriver: (driverId, event, data) => {
+      io.to(`driver_${driverId}`).emit(event, data);
     },
     emitToOrder: (trackingToken, event, data) => {
       io.to(`order_${trackingToken}`).emit(event, data);
