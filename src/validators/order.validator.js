@@ -83,8 +83,15 @@ const updateSettingsSchema = z.object({
     .optional()
 });
 
+const confirmDeliverySchema = z.object({
+  deliveryPin: z
+    .string({ required_error: 'Le code PIN de livraison est obligatoire' })
+    .regex(/^\d{4}$/, 'Le code PIN doit comporter exactement 4 chiffres')
+});
+
 module.exports = {
   createOrderSchema,
   updateOrderStatusSchema,
-  updateSettingsSchema
+  updateSettingsSchema,
+  confirmDeliverySchema
 };

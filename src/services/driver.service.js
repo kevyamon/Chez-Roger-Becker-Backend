@@ -1,17 +1,24 @@
 /**
- * Service de gestion des activités des livreurs (DriverService).
- * Disponibilité, acceptation concurrente, cycle de livraison, statistiques et profil.
+ * Service de gestion des activités opérationnelles des livreurs (DriverService).
+ * Règle Forteresse : Verrouillage strict (1 livraison active par livreur), validation du code PIN anti-litige.
  */
 
-const bcrypt = require('bcryptjs');
 const User = require('../models/user.model');
 const Order = require('../models/order.model');
-const AuditLog = require('../models/auditLog.model');
 const notificationService = require('./notification.service');
+const driverProfileService = require('./driverProfile.service');
 const { DriverStatus, OrderStatus, ErrorCodes } = require('../constants/enums');
 
 class DriverService {
   async updateStatus(driverId, newStatus, socketEmitter = null) {
+    if (newStatus === DriverStatus.AVAILABLE) {
+      const activeCount = await Order.countDocuments({
+        driverId,
+        status: { $in: [OrderStatus.ASSIGNED, OrderStatus.PICKED_UP, OrderStatus.OUT_FOR_DELIVERY] }
+      });
+      if (activeCount > 0) newStatus = DriverStatus.BUSY;
+    }
+
     const driver = await User.findOneAndUpdate(
       { _id: driverId, role: 'DRIVER', isActive: true },
       { driverStatus: newStatus },
@@ -33,11 +40,8 @@ class DriverService {
 
   async getAvailableOrders(driverId = null) {
     const query = { status: OrderStatus.READY_FOR_PICKUP };
-    if (driverId) {
-      query.$or = [{ driverId: null }, { driverId }];
-    } else {
-      query.driverId = null;
-    }
+    if (driverId) query.$or = [{ driverId: null }, { driverId }];
+    else query.driverId = null;
     return Order.find(query).sort({ createdAt: 1 }).lean();
   }
 
@@ -45,6 +49,19 @@ class DriverService {
     const driver = await User.findById(driverId);
     if (!driver || driver.driverStatus === DriverStatus.OFFLINE) {
       const error = new Error('Vous devez être connecté et disponible pour accepter une course.');
+      error.statusCode = 400;
+      error.code = ErrorCodes.DRIVER_NOT_AVAILABLE;
+      throw error;
+    }
+
+    // Verrouillage strict : une seule course active à la fois
+    const activeCount = await Order.countDocuments({
+      driverId,
+      status: { $in: [OrderStatus.ASSIGNED, OrderStatus.PICKED_UP, OrderStatus.OUT_FOR_DELIVERY] }
+    });
+
+    if (activeCount > 0) {
+      const error = new Error('Vous avez déjà une course active en cours. Vous devez la livrer avant d\'en accepter une autre.');
       error.statusCode = 400;
       error.code = ErrorCodes.DRIVER_NOT_AVAILABLE;
       throw error;
@@ -87,6 +104,7 @@ class DriverService {
         driver: { firstName: driver.firstName, lastName: driver.lastName, phone: driver.phone }
       });
       socketEmitter.emitToAdmin('order:updated', order);
+      socketEmitter.emitToAdmin('driver:status-changed', { driverId: driver._id, status: DriverStatus.BUSY });
       socketEmitter.emitToDrivers('order:taken', { orderId });
     }
 
@@ -181,29 +199,38 @@ class DriverService {
     return order;
   }
 
-  async confirmDelivered(orderId, driverId, socketEmitter = null) {
-    const order = await Order.findOneAndUpdate(
-      { _id: orderId, driverId, status: OrderStatus.OUT_FOR_DELIVERY },
-      {
-        $set: { status: OrderStatus.DELIVERED, 'payment.status': 'PAID' },
-        $push: {
-          statusHistory: {
-            status: OrderStatus.DELIVERED,
-            changedBy: `DRIVER:${driverId}`,
-            changedAt: new Date(),
-            note: 'Commande remise avec succès au client'
-          }
-        }
-      },
-      { new: true }
-    );
+  async confirmDelivered(orderId, driverId, deliveryPin, socketEmitter = null) {
+    const order = await Order.findOne({
+      _id: orderId,
+      driverId,
+      status: OrderStatus.OUT_FOR_DELIVERY
+    });
 
     if (!order) {
-      const error = new Error('Impossible de confirmer la livraison.');
+      const error = new Error('Impossible de confirmer la livraison. La commande doit être en cours d\'acheminement.');
       error.statusCode = 400;
       error.code = ErrorCodes.INVALID_ORDER_STATUS;
       throw error;
     }
+
+    const providedPin = (deliveryPin || '').toString().trim();
+    if (!providedPin || providedPin !== order.deliveryPin) {
+      const error = new Error('Code PIN de livraison incorrect. Veuillez demander le code à 4 chiffres affiché sur le téléphone du client.');
+      error.statusCode = 400;
+      error.code = ErrorCodes.VALIDATION_ERROR;
+      throw error;
+    }
+
+    order.status = OrderStatus.DELIVERED;
+    order.payment.status = 'PAID';
+    order.statusHistory.push({
+      status: OrderStatus.DELIVERED,
+      changedBy: `DRIVER:${driverId}`,
+      changedAt: new Date(),
+      note: 'Commande remise avec succès au client (Code PIN validé)'
+    });
+
+    await order.save();
 
     const driver = await User.findByIdAndUpdate(
       driverId,
@@ -217,6 +244,12 @@ class DriverService {
         status: OrderStatus.DELIVERED
       });
       socketEmitter.emitToAdmin('order:updated', order);
+      if (driver) {
+        socketEmitter.emitToAdmin('driver:status-changed', {
+          driverId: driver._id,
+          status: DriverStatus.AVAILABLE
+        });
+      }
     }
 
     const driverName = driver ? `${driver.firstName} ${driver.lastName}` : 'Le livreur';
@@ -229,7 +262,7 @@ class DriverService {
 
     notificationService.notifyAdmins({
       title: `Commande #${order.orderNumber} livrée !`,
-      body: `Livrée avec succès par ${driverName}.`,
+      body: `Remise au client par ${driverName} (Montant encaissé : ${order.total} FCFA).`,
       data: { orderId: order._id.toString(), type: 'ORDER_DELIVERED' },
       url: '/admin'
     }).catch(() => {});
@@ -241,9 +274,7 @@ class DriverService {
     return Order.find({
       driverId,
       status: { $in: [OrderStatus.ASSIGNED, OrderStatus.PICKED_UP, OrderStatus.OUT_FOR_DELIVERY] }
-    })
-      .sort({ createdAt: -1 })
-      .lean();
+    }).sort({ createdAt: -1 }).lean();
   }
 
   async getDriverHistory(driverId, { page = 1, limit = 20 }) {
@@ -256,82 +287,16 @@ class DriverService {
     return { orders, total, page, limit };
   }
 
-  async getDriverStats(driverId) {
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-
-    const [todayOrders, totalOrders, todayFinancials, totalFinancials] = await Promise.all([
-      Order.countDocuments({ driverId, status: OrderStatus.DELIVERED, updatedAt: { $gte: startOfToday } }),
-      Order.countDocuments({ driverId, status: OrderStatus.DELIVERED }),
-      Order.aggregate([
-        { $match: { driverId, status: OrderStatus.DELIVERED, updatedAt: { $gte: startOfToday } } },
-        { $group: { _id: null, totalCash: { $sum: '$total' } } }
-      ]),
-      Order.aggregate([
-        { $match: { driverId, status: OrderStatus.DELIVERED } },
-        { $group: { _id: null, totalCash: { $sum: '$total' } } }
-      ])
-    ]);
-
-    return {
-      todayDeliveries: todayOrders,
-      totalDeliveries: totalOrders,
-      todayCashCollected: todayFinancials[0]?.totalCash || 0,
-      totalCashCollected: totalFinancials[0]?.totalCash || 0
-    };
+  getDriverStats(driverId) {
+    return driverProfileService.getDriverStats(driverId);
   }
 
-  async updateProfile(driverId, { firstName, lastName, phone, email }) {
-    const updates = {};
-    if (firstName) updates.firstName = firstName.trim();
-    if (lastName) updates.lastName = lastName.trim();
-
-    if (email) {
-      const normalizedEmail = email.toLowerCase().trim();
-      const existing = await User.findOne({ email: normalizedEmail, _id: { $ne: driverId } });
-      if (existing) {
-        const error = new Error('Cette adresse e-mail est déjà utilisée par un autre compte.');
-        error.statusCode = 409;
-        throw error;
-      }
-      updates.email = normalizedEmail;
-    }
-
-    if (phone) {
-      const normalizedPhone = phone.trim();
-      const existing = await User.findOne({ phone: normalizedPhone, _id: { $ne: driverId } });
-      if (existing) {
-        const error = new Error('Ce numéro de téléphone est déjà utilisé.');
-        error.statusCode = 409;
-        throw error;
-      }
-      updates.phone = normalizedPhone;
-    }
-
-    const updatedUser = await User.findByIdAndUpdate(driverId, updates, { new: true, runValidators: true });
-    return updatedUser ? updatedUser.toJSON() : null;
+  updateProfile(driverId, payload) {
+    return driverProfileService.updateProfile(driverId, payload);
   }
 
-  async changePassword(driverId, { oldPassword, newPassword }) {
-    const user = await User.findById(driverId).select('+passwordHash');
-    if (!user) {
-      const error = new Error('Compte livreur introuvable.');
-      error.statusCode = 404;
-      throw error;
-    }
-
-    const isMatch = await user.comparePassword(oldPassword);
-    if (!isMatch) {
-      const error = new Error('Le mot de passe actuel est incorrect.');
-      error.statusCode = 400;
-      throw error;
-    }
-
-    const salt = await bcrypt.genSalt(12);
-    user.passwordHash = await bcrypt.hash(newPassword, salt);
-    await user.save();
-
-    return { message: 'Mot de passe modifié avec succès.' };
+  changePassword(driverId, payload) {
+    return driverProfileService.changePassword(driverId, payload);
   }
 }
 

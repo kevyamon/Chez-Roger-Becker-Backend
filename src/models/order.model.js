@@ -176,6 +176,12 @@ const orderSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
       index: true
+    },
+    deliveryPin: {
+      type: String,
+      required: true,
+      default: () => Math.floor(1000 + Math.random() * 9000).toString(),
+      trim: true
     }
   },
   {

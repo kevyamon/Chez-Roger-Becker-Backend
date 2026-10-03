@@ -13,6 +13,7 @@ const {
   updateDriverProfileSchema,
   changePasswordSchema
 } = require('../validators/auth.validator');
+const { confirmDeliverySchema } = require('../validators/order.validator');
 
 // Protection globale de l'espace livreur
 router.use(authenticate, requireDriver);
@@ -29,7 +30,7 @@ router.get('/orders', driverController.getMyOrders);
 router.post('/orders/:id/accept', driverController.acceptOrder);
 router.post('/orders/:id/picked-up', driverController.confirmPickup);
 router.post('/orders/:id/out-for-delivery', driverController.startDelivery);
-router.post('/orders/:id/delivered', driverController.confirmDelivered);
+router.post('/orders/:id/delivered', validateRequest(confirmDeliverySchema), driverController.confirmDelivered);
 
 // Mise à jour de la disponibilité
 router.patch('/status', validateRequest(updateDriverStatusSchema), driverController.updateStatus);

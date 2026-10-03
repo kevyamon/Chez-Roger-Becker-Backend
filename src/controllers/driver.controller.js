@@ -1,9 +1,10 @@
 /**
  * Contrôleur pour l'espace et les opérations des livreurs (DriverController).
- * Orchestration des courses, mises à jour de statut, profil et statistiques.
+ * Orchestration des courses, validation PIN de livraison, profil et statistiques.
  */
 
 const driverService = require('../services/driver.service');
+const driverProfileService = require('../services/driverProfile.service');
 const { sendSuccess, sendPaginated } = require('../utils/responseHelper');
 
 class DriverController {
@@ -11,7 +12,7 @@ class DriverController {
     try {
       const activeDeliveries = await driverService.getActiveDeliveries(req.user.id);
       const availableOrders = await driverService.getAvailableOrders(req.user.id);
-      const stats = await driverService.getDriverStats(req.user.id);
+      const stats = await driverProfileService.getDriverStats(req.user.id);
 
       return sendSuccess(
         res,
@@ -79,8 +80,9 @@ class DriverController {
   async confirmDelivered(req, res, next) {
     try {
       const socketEmitter = req.app.get('socketEmitter');
-      const order = await driverService.confirmDelivered(req.params.id, req.user.id, socketEmitter);
-      return sendSuccess(res, { order }, 'Course terminée et encaissée avec succès !');
+      const { deliveryPin } = req.body;
+      const order = await driverService.confirmDelivered(req.params.id, req.user.id, deliveryPin, socketEmitter);
+      return sendSuccess(res, { order }, 'Course terminée et livrée avec succès !');
     } catch (error) {
       next(error);
     }
@@ -108,7 +110,7 @@ class DriverController {
 
   async getStats(req, res, next) {
     try {
-      const stats = await driverService.getDriverStats(req.user.id);
+      const stats = await driverProfileService.getDriverStats(req.user.id);
       return sendSuccess(res, { stats }, 'Statistiques du livreur récupérées');
     } catch (error) {
       next(error);
@@ -117,7 +119,7 @@ class DriverController {
 
   async updateProfile(req, res, next) {
     try {
-      const user = await driverService.updateProfile(req.user.id, req.body);
+      const user = await driverProfileService.updateProfile(req.user.id, req.body);
       return sendSuccess(res, { user }, 'Profil mis à jour avec succès');
     } catch (error) {
       next(error);
@@ -126,7 +128,7 @@ class DriverController {
 
   async changePassword(req, res, next) {
     try {
-      const result = await driverService.changePassword(req.user.id, req.body);
+      const result = await driverProfileService.changePassword(req.user.id, req.body);
       return sendSuccess(res, result, 'Mot de passe modifié avec succès');
     } catch (error) {
       next(error);

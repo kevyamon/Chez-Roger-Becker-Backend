@@ -5,6 +5,7 @@
 
 const Order = require('../models/order.model');
 const Dish = require('../models/dish.model');
+const User = require('../models/user.model');
 const RestaurantSettings = require('../models/restaurantSettings.model');
 const AuditLog = require('../models/auditLog.model');
 const notificationService = require('./notification.service');
@@ -13,16 +14,11 @@ const { checkIsRestaurantOpen } = require('../utils/scheduleHelper');
 const { OrderStatus, AllowedOrderTransitions, ErrorCodes } = require('../constants/enums');
 
 class OrderService {
-  /**
-   * Création sécurisée d'une nouvelle commande client.
-   */
   async createOrder(orderPayload, socketEmitter = null) {
     const settings = await RestaurantSettings.getSettings();
     const status = checkIsRestaurantOpen(settings);
     if (!status.isOpen) {
-      const error = new Error(
-        settings.closedMessage || status.reason || 'La commande n\'est pas possible actuellement car le restaurant est fermé.'
-      );
+      const error = new Error(settings.closedMessage || status.reason || 'La commande n\'est pas possible actuellement car le restaurant est fermé.');
       error.statusCode = 400;
       error.code = ErrorCodes.RESTAURANT_CLOSED;
       throw error;
@@ -44,9 +40,7 @@ class OrderService {
         throw error;
       }
 
-      const unitPrice = dish.promotionalPrice && dish.promotionalPrice < dish.price 
-        ? dish.promotionalPrice 
-        : dish.price;
+      const unitPrice = dish.promotionalPrice && dish.promotionalPrice < dish.price ? dish.promotionalPrice : dish.price;
       const itemSubtotal = unitPrice * item.quantity;
       subtotal += itemSubtotal;
 
@@ -75,21 +69,12 @@ class OrderService {
       total,
       delivery: orderPayload.delivery,
       status: OrderStatus.PENDING,
-      payment: {
-        method: orderPayload.paymentMethod || 'CASH_ON_DELIVERY',
-        status: 'PENDING'
-      },
-      statusHistory: [{
-        status: OrderStatus.PENDING,
-        changedBy: 'CUSTOMER',
-        changedAt: new Date(),
-        note: 'Commande reçue par le restaurant'
-      }]
+      payment: { method: orderPayload.paymentMethod || 'CASH_ON_DELIVERY', status: 'PENDING' },
+      statusHistory: [{ status: OrderStatus.PENDING, changedBy: 'CUSTOMER', changedAt: new Date(), note: 'Commande reçue par le restaurant' }]
     });
 
     if (socketEmitter) socketEmitter.emitToAdmin('order:created', order);
 
-    // Notification Push vers les administrateurs
     notificationService.notifyAdmins({
       title: `Nouvelle commande #${order.orderNumber} !`,
       body: `Montant : ${order.total} FCFA — Client : ${order.customer.name}`,
@@ -100,9 +85,6 @@ class OrderService {
     return order;
   }
 
-  /**
-   * Suivi public d'une commande via trackingToken ou numéro.
-   */
   async trackOrderByToken(identifier) {
     const cleanId = (identifier || '').trim();
     const order = await Order.findOne({
@@ -135,9 +117,6 @@ class OrderService {
     };
   }
 
-  /**
-   * Transition d'état et déclenchement des notifications.
-   */
   async updateOrderStatus(orderId, newStatus, actorId, actorRole, note = '', socketEmitter = null) {
     const order = await Order.findById(orderId);
     if (!order) {
@@ -157,6 +136,7 @@ class OrderService {
     }
 
     order.status = newStatus;
+    if (newStatus === OrderStatus.DELIVERED) order.payment.status = 'PAID';
     order.statusHistory.push({
       status: newStatus,
       changedBy: `${actorRole}:${actorId}`,
@@ -164,6 +144,21 @@ class OrderService {
       note
     });
     await order.save();
+
+    // Si la commande est clôturée ou annulée, libération automatique du livreur assigné
+    if ([OrderStatus.DELIVERED, OrderStatus.CANCELLED].includes(newStatus) && order.driverId) {
+      const remainingActive = await Order.countDocuments({
+        _id: { $ne: order._id },
+        driverId: order.driverId,
+        status: { $in: [OrderStatus.ASSIGNED, OrderStatus.PICKED_UP, OrderStatus.OUT_FOR_DELIVERY] }
+      });
+      if (remainingActive === 0) {
+        const freed = await User.findByIdAndUpdate(order.driverId, { driverStatus: 'AVAILABLE' }, { new: true });
+        if (socketEmitter && freed) {
+          socketEmitter.emitToAdmin('driver:status-changed', { driverId: freed._id, status: 'AVAILABLE' });
+        }
+      }
+    }
 
     await AuditLog.create({
       action: 'ORDER_STATUS_CHANGED',
@@ -193,9 +188,6 @@ class OrderService {
     return order;
   }
 
-  /**
-   * Émission ciblée des notifications push selon le statut.
-   */
   _sendPushForStatus(order, status, note = '') {
     const tracking = order.trackingToken;
     const num = order.orderNumber;
@@ -228,9 +220,6 @@ class OrderService {
     }
   }
 
-  /**
-   * Récupération des commandes avec pagination et filtres pour l'administration.
-   */
   async getAdminOrders({ status, driverId, search, date, page = 1, limit = 20 }) {
     const query = {};
     if (status) query.status = status;

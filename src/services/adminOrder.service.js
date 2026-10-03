@@ -97,8 +97,36 @@ class AdminOrderService {
       throw error;
     }
 
+    // Verrouillage : le livreur ne peut pas recevoir de nouvelle course s'il en a déjà une en cours
+    const activeDeliveriesCount = await Order.countDocuments({
+      _id: { $ne: order._id },
+      driverId: driver._id,
+      status: { $in: [OrderStatus.ASSIGNED, OrderStatus.PICKED_UP, OrderStatus.OUT_FOR_DELIVERY] }
+    });
+
+    if (activeDeliveriesCount > 0) {
+      const error = new Error(`Le livreur ${driver.firstName} ${driver.lastName} a déjà une livraison en cours.`);
+      error.statusCode = 400;
+      error.code = ErrorCodes.DRIVER_NOT_AVAILABLE;
+      throw error;
+    }
+
     const previousDriverId = order.driverId;
     order.driverId = driver._id;
+    driver.driverStatus = DriverStatus.BUSY;
+    await driver.save();
+
+    // Libération de l'ancien livreur s'il n'a plus d'autre course
+    if (previousDriverId && previousDriverId.toString() !== driver._id.toString()) {
+      const prevActiveCount = await Order.countDocuments({
+        _id: { $ne: order._id },
+        driverId: previousDriverId,
+        status: { $in: [OrderStatus.ASSIGNED, OrderStatus.PICKED_UP, OrderStatus.OUT_FOR_DELIVERY] }
+      });
+      if (prevActiveCount === 0) {
+        await User.findByIdAndUpdate(previousDriverId, { driverStatus: DriverStatus.AVAILABLE });
+      }
+    }
 
     // Progression naturelle de l'état : si la commande est reçue/en préparation, elle devient prête pour récupération
     const isEarlyStatus = [OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.PREPARING].includes(order.status);
