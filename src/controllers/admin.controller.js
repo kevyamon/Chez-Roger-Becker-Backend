@@ -268,22 +268,17 @@ class AdminController {
     }
   }
 
-  // JOURNAL D'AUDIT (AUDIT LOGS)
-  async getAuditLogs(req, res, next) {
-    try {
-      const { page = 1, limit = 30, action, actorId } = req.query;
-      const { logs, total } = await settingsService.getAuditLogs({ page, limit, action, actorId });
-      return sendPaginated(res, logs, { total, page, limit }, 'Journal d\'audit récupéré avec succès');
-    } catch (error) {
-      next(error);
-    }
-  }
-
   // HISTORIQUE DES COMMANDES LIVRÉES
   async getOrdersHistory(req, res, next) {
     try {
-      const { page = 1, limit = 20, search, date } = req.query;
-      const { orders, total } = await settingsService.getCompletedOrdersHistory({ page, limit, search, date });
+      const { page = 1, limit = 20, search, date, includeArchived } = req.query;
+      const { orders, total } = await settingsService.getCompletedOrdersHistory({
+        page,
+        limit,
+        search,
+        date,
+        includeArchived: includeArchived === 'true'
+      });
       return sendPaginated(res, orders, { total, page, limit }, 'Historique des commandes chargé');
     } catch (error) {
       next(error);
@@ -292,3 +287,4 @@ class AdminController {
 }
 
 module.exports = new AdminController();
+

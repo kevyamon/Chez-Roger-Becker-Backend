@@ -39,7 +39,10 @@ router.patch('/status', validateRequest(updateDriverStatusSchema), driverControl
 router.patch('/profile', validateRequest(updateDriverProfileSchema), driverController.updateProfile);
 router.patch('/change-password', validateRequest(changePasswordSchema), driverController.changePassword);
 
-// Historique des livraisons effectuées
+// Historique des livraisons effectuées & Nettoyage
 router.get('/history', driverController.getHistory);
+router.patch('/orders/:id/archive', driverController.archiveHistoryOrder);
+router.delete('/history', driverController.clearHistory);
 
 module.exports = router;
+

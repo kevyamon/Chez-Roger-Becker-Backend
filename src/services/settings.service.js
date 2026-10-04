@@ -82,7 +82,7 @@ class SettingsService {
       Order.countDocuments({ status: { $in: [OrderStatus.ASSIGNED, OrderStatus.PICKED_UP, OrderStatus.OUT_FOR_DELIVERY] } }),
       Order.countDocuments({ status: OrderStatus.DELIVERED }),
       Order.countDocuments({ status: OrderStatus.CANCELLED }),
-      Order.find().populate('driverId', 'firstName lastName phone').sort({ createdAt: -1 }).limit(10).lean(),
+      Order.find({ isArchived: { $ne: true } }).populate('driverId', 'firstName lastName phone').sort({ createdAt: -1 }).limit(10).lean(),
       Order.aggregate([
         { $match: { createdAt: { $gte: startOfToday }, status: { $ne: OrderStatus.CANCELLED } } },
         { $group: { _id: null, totalRevenue: { $sum: '$total' } } }
@@ -92,6 +92,7 @@ class SettingsService {
         { $group: { _id: null, totalRevenue: { $sum: '$total' } } }
       ])
     ]);
+
 
     return {
       kpi: {
@@ -210,29 +211,12 @@ class SettingsService {
     return { message: 'Livreur supprimé avec succès' };
   }
 
-  // --- JOURNAL D'AUDIT (AUDIT LOGS) ---
-  async getAuditLogs({ page = 1, limit = 30, action, actorId } = {}) {
-    const query = {};
-    if (action) query.action = action;
-    if (actorId) query.actorId = actorId;
-
-    const skip = (Number(page) - 1) * Number(limit);
-    const [logs, total] = await Promise.all([
-      AuditLog.find(query)
-        .populate('actorId', 'firstName lastName email role')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(Number(limit))
-        .lean(),
-      AuditLog.countDocuments(query)
-    ]);
-
-    return { logs, total, page, limit };
-  }
-
   // --- HISTORIQUE DÉDIÉ DES COMMANDES LIVRÉES / TERMINÉES ---
-  async getCompletedOrdersHistory({ page = 1, limit = 20, search, date } = {}) {
+  async getCompletedOrdersHistory({ page = 1, limit = 20, search, date, includeArchived = false } = {}) {
     const query = { status: { $in: [OrderStatus.DELIVERED, OrderStatus.CANCELLED] } };
+    if (!includeArchived) {
+      query.isArchived = { $ne: true };
+    }
     if (search) {
       query.$or = [
         { orderNumber: { $regex: search.trim(), $options: 'i' } },
@@ -264,3 +248,4 @@ class SettingsService {
 }
 
 module.exports = new SettingsService();
+

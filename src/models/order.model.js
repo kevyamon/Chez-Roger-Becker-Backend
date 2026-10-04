@@ -177,6 +177,16 @@ const orderSchema = new mongoose.Schema(
       default: false,
       index: true
     },
+    isArchived: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    driverArchived: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
     deliveryPin: {
       type: String,
       required: true,
@@ -200,7 +210,10 @@ orderSchema.index({ 'delivery.location': '2dsphere' });
 orderSchema.index({ status: 1, createdAt: -1 });
 orderSchema.index({ driverId: 1, status: 1 });
 orderSchema.index({ isViewedByAdmin: 1, createdAt: -1 });
+orderSchema.index({ isArchived: 1, createdAt: -1 });
+orderSchema.index({ driverId: 1, driverArchived: 1 });
 
 const Order = mongoose.model('Order', orderSchema);
 
 module.exports = Order;
+

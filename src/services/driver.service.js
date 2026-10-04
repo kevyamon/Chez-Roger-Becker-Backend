@@ -279,12 +279,22 @@ class DriverService {
 
   async getDriverHistory(driverId, { page = 1, limit = 20 }) {
     const skip = (Number(page) - 1) * Number(limit);
-    const query = { driverId, status: OrderStatus.DELIVERED };
+    const query = { driverId, status: OrderStatus.DELIVERED, driverArchived: { $ne: true } };
     const [orders, total] = await Promise.all([
       Order.find(query).sort({ updatedAt: -1 }).skip(skip).limit(Number(limit)).lean(),
       Order.countDocuments(query)
     ]);
     return { orders, total, page, limit };
+  }
+
+  archiveHistoryOrder(driverId, orderId) {
+    const orderArchiveService = require('./orderArchive.service');
+    return orderArchiveService.archiveDriverOrder(driverId, orderId);
+  }
+
+  clearHistory(driverId) {
+    const orderArchiveService = require('./orderArchive.service');
+    return orderArchiveService.clearDriverHistory(driverId);
   }
 
   getDriverStats(driverId) {
@@ -301,3 +311,4 @@ class DriverService {
 }
 
 module.exports = new DriverService();
+

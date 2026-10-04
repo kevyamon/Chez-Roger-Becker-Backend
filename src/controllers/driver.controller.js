@@ -108,6 +108,24 @@ class DriverController {
     }
   }
 
+  async archiveHistoryOrder(req, res, next) {
+    try {
+      const order = await driverService.archiveHistoryOrder(req.user.id, req.params.id);
+      return sendSuccess(res, { order }, 'Course masquée de votre historique');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async clearHistory(req, res, next) {
+    try {
+      const result = await driverService.clearHistory(req.user.id);
+      return sendSuccess(res, result, 'Historique des livraisons effacé avec succès');
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async getStats(req, res, next) {
     try {
       const stats = await driverProfileService.getDriverStats(req.user.id);
@@ -137,3 +155,4 @@ class DriverController {
 }
 
 module.exports = new DriverController();
+

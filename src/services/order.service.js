@@ -220,10 +220,17 @@ class OrderService {
     }
   }
 
-  async getAdminOrders({ status, driverId, search, date, page = 1, limit = 20 }) {
+  async getAdminOrders({ status, driverId, search, date, isArchived, page = 1, limit = 20 }) {
     const query = {};
     if (status) query.status = status;
     if (driverId) query.driverId = driverId;
+    if (isArchived === 'true' || isArchived === true) {
+      query.isArchived = true;
+    } else if (isArchived === 'all') {
+      // Afficher toutes (archivées et non archivées)
+    } else {
+      query.isArchived = { $ne: true };
+    }
     if (search) {
       query.$or = [
         { orderNumber: { $regex: search.trim(), $options: 'i' } },
@@ -253,5 +260,6 @@ class OrderService {
     return { orders, total, page, limit };
   }
 }
+
 
 module.exports = new OrderService();

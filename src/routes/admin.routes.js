@@ -6,6 +6,7 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/admin.controller');
 const adminOrderController = require('../controllers/adminOrder.controller');
+const adminAuditController = require('../controllers/adminAudit.controller');
 const { authenticate, requireAdmin } = require('../middleware/authMiddleware');
 const { validateRequest } = require('../middleware/validateRequest');
 const { uploadImageMiddleware } = require('../middleware/upload');
@@ -36,7 +37,7 @@ router.patch('/categories/:id', validateRequest(updateCategorySchema), adminCont
 router.put('/categories/:id', validateRequest(updateCategorySchema), adminController.updateCategory);
 router.delete('/categories/:id', adminController.deleteCategory);
 
-// Gestion des commandes
+// Gestion des commandes & Archivage
 router.get('/orders', adminController.getOrders);
 router.get('/orders-history', adminController.getOrdersHistory);
 router.get('/orders/:id', adminController.getOrderById);
@@ -44,6 +45,10 @@ router.patch('/orders/:id/status', validateRequest(updateOrderStatusSchema), adm
 router.patch('/orders/:id/viewed', adminOrderController.markAsViewed);
 router.patch('/orders/mark-all-viewed', adminOrderController.markAllAsViewed);
 router.post('/orders/:id/assign-driver', adminOrderController.assignDriver);
+router.patch('/orders/:id/archive', adminOrderController.archiveOrder);
+router.patch('/orders/:id/unarchive', adminOrderController.unarchiveOrder);
+router.post('/orders/archive-completed', adminOrderController.archiveCompletedOrders);
+router.delete('/orders/:id', adminOrderController.deleteOrder);
 
 // Gestion des livreurs
 router.get('/drivers', adminController.getDrivers);
@@ -61,7 +66,9 @@ router.delete('/promotions/:id', adminController.deletePromotion);
 router.get('/settings', adminController.getSettings);
 router.patch('/settings', validateRequest(updateSettingsSchema), adminController.updateSettings);
 
-// Journal d'audit (Audit Trail)
-router.get('/audit-logs', adminController.getAuditLogs);
+// Journal d'audit & Purge
+router.get('/audit-logs', adminAuditController.getAuditLogs);
+router.delete('/audit-logs/:id', adminAuditController.deleteAuditLog);
+router.delete('/audit-logs', adminAuditController.clearAuditLogs);
 
 module.exports = router;
